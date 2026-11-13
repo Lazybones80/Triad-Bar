@@ -1,0 +1,1794 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><meta name="theme-color" content="#313133"><title>Triad Bar</title>
+<style>
+:root{color-scheme:dark;--bg:#313133;--panel:#0d111a;--blue:#438bff;--fg:#f5f8ff;--cell:34px;--cw:22px;--font:15px;--line:1px;--bar-bg:linear-gradient(160deg,#1c2436 0%,#161d2d 100%);--pad:8px}
+
+*{box-sizing:border-box}
+html,body{touch-action:none;overscroll-behavior:none;margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+main{width:100%;height:100%;background:var(--bg)}
+
+.key-wheel-wrap{display:none!important;position:fixed;z-index:30;left:50%;top:calc(50% - 86.25px);bottom:auto;transform:translateX(-50%);width:172.5px;display:flex;flex-direction:column;align-items:stretch;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
+.key-wheel-wrap.dragging{cursor:grabbing}
+
+.mode-indicator{display:none!important}
+
+.bars-area{position:fixed;inset:0;z-index:10;pointer-events:none}
+.bar-wrap{position:fixed;width:calc(100% - 16px);left:8px;right:auto;touch-action:none;pointer-events:auto;user-select:none;-webkit-user-select:none}
+#bottomWrap{top:56px}
+.chord-labels{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));width:100%;height:30px;align-items:center;margin-bottom:2px;color:#6cc4ff;font-size:var(--font);font-weight:500;text-align:center;line-height:1}
+.chord-label{display:block;min-width:0;width:100%;height:100%;position:relative;overflow:visible;white-space:nowrap}
+.label-root-acc{position:absolute;left:25%;top:50%;margin-left:0;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:flex-start;white-space:nowrap}
+.label-root{display:inline-block;flex:0 0 auto;width:auto;text-align:left;line-height:1}
+.label-acc{display:inline-block;line-height:1;margin-left:.02em}
+.label-acc:empty{margin-left:0}
+.label-suffix{display:inline-block;font-size:.9em;line-height:1;white-space:nowrap;margin-left:.03em}
+.sus-word{font-size:calc(1em - 3px)}
+.sus-num{line-height:1;font-size:calc(1em - 4px)}
+.label-suffix.compact-altered-sus{font-size:.9em}
+/* A sus chord with an added 7 / maj7 / 6 / 9 / 11 / 13 (M11sus2, 7sus, 6sus2 ...): the whole name is the size of the "sus" in the plain sus labels (3px under the label text) - top labels, note bar headings and the quality box. */
+.label-suffix.sus-combo{font-size:calc(.9em - 3px)!important}
+.quality-text .sus-combo{font-size:calc(1em - 3px)}
+.triad-bar{display:grid;width:100%;background:var(--bar-bg);border:calc(2*var(--line)) solid var(--blue);/* outside line 2x */border-radius:9px;overflow:hidden;grid-template-columns:repeat(var(--groups),minmax(0,1fr));}
+
+.triad-group{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));min-width:0;border-right:calc(2*var(--line)) solid var(--blue)} /* line between chords is 2x; the line between a note and its accidental column stays normal */
+.triad-group:last-child{border-right:0}
+.note-stack,.acc-stack{display:grid;grid-template-rows:repeat(var(--rows,3),var(--cell));min-width:0}
+.note-stack{border-right:var(--line) solid var(--blue)}
+.acc-stack{border-right:0}
+.triad-cell{display:flex;align-items:center;justify-content:center;min-width:0;overflow:hidden;white-space:nowrap;font-size:var(--font);line-height:1;font-weight:500;border-bottom:var(--line) solid var(--blue);color:var(--fg);padding:0 1px}
+.triad-cell:last-child{border-bottom:0}
+.acc-stack .triad-cell{font-size:var(--font)}
+.blank{color:transparent!important}
+.double-accidental{color:#7b808b!important} /* double-accidental notes are dark grey: red is now the circle-of-fifths colour of C */
+@media(max-width:390px){.motion-indicator .formula-cell{font-size:calc(var(--font)*.8)!important}.bars-area{gap:14px}.triad-cell{padding:0}.acc-stack .triad-cell{font-size:var(--font)}}
+
+.swipe-pad{position:fixed;right:18px;top:calc(50% - 70px);transform:none;width:154px;height:160px;display:grid;grid-template-columns:repeat(4,34px);grid-template-rows:repeat(4,34px);justify-content:center;align-content:center;column-gap:6px;row-gap:8px;z-index:35;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none}
+
+.swipe-btn{position:relative;justify-self:center;align-self:center;width:34px;height:34px;background:linear-gradient(145deg,rgba(120,162,255,.42) 0%,rgba(77,126,232,.16) 52%,rgba(53,102,200,.3) 100%);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);border:1px solid rgba(170,200,255,.45);border-radius:11px;padding:0;margin:0;outline:none;display:flex;align-items:center;justify-content:center;color:#fff;line-height:1;font-family:Arial,sans-serif;box-shadow:inset 2px 2px 4px #ffffff55,inset -3px -3px 5px #183d8d88,0 6px 10px #0008;transition:transform .08s,box-shadow .08s}
+
+.swipe-btn:active{transform:translateY(3px);box-shadow:inset 2px 2px 4px #ffffff44,inset -2px -2px 4px #183d8d88,0 3px 6px #0008}
+
+.swipe-btn.active,.swipe-btn.active:active{z-index:3;border-color:#438bff;box-shadow:0 0 0 2px #438bff,0 10px 18px rgba(0,0,0,.95),0 3px 6px rgba(0,0,0,.9)}
+
+.motion-indicator{position:absolute;left:calc(50% - var(--cell));top:calc(-3 * var(--cell) - 11px);width:calc(2 * var(--cell));height:calc(3 * var(--cell));display:grid;grid-template-columns:repeat(2,var(--cell));grid-template-rows:repeat(3,var(--cell));background:var(--bar-bg);border:var(--line) solid var(--blue);border-radius:9px;overflow:hidden;box-shadow:none;pointer-events:none}
+.motion-cell{display:flex;align-items:center;justify-content:center;border-right:var(--line) solid var(--blue);border-bottom:var(--line) solid var(--blue);color:#fff;font-size:22px;font-weight:800;line-height:1;text-shadow:none;min-width:0;min-height:0}
+.motion-square{display:inline-block;box-sizing:border-box;width:.7em;height:.14em;border:0;border-radius:0;background:#fff}
+.motion-triangle-pair{display:inline-flex;align-items:center;justify-content:center;gap:0;max-width:100%;white-space:nowrap}
+.motion-triangle{display:inline-block;font-size:15px;line-height:1;font-weight:900;transform:scaleX(.95);flex:0 0 auto;color:#fff}
+.motion-cell.double-motion,.formula-cell.double-motion,.double-motion .motion-triangle{color:var(--blue)!important}
+.motion-arrow-cell{grid-column:2;border-right:0}
+.formula-cell{grid-column:1;font-family:inherit;font-size:calc(var(--font)*.86)!important;font-weight:500!important;line-height:1;border-right:var(--line) solid var(--blue)}
+.motion-middle{font-size:21px}
+.swipe-btn.sus2{grid-column:1;grid-row:4}
+.swipe-btn.sus4{grid-column:3;grid-row:1}
+.swipe-btn.aug{grid-column:2;grid-row:1}
+.swipe-btn.dim{grid-column:2;grid-row:4}
+.swipe-btn .btn-label{position:relative;z-index:1;display:block;text-align:center;color:#fff;font-size:15px;font-weight:800;line-height:1;letter-spacing:0;white-space:nowrap;pointer-events:none;text-shadow:0 2px 2px #16336bcc}
+
+.swipe-btn.up{left:auto;right:auto;top:auto;bottom:auto;grid-column:2;grid-row:2}
+
+.swipe-btn.down{left:auto;right:auto;top:auto;bottom:auto;grid-column:2;grid-row:3}
+
+.swipe-btn.left{left:auto;right:auto;top:auto;bottom:auto;grid-column:1;grid-row:2 / span 2;height:auto;align-self:stretch}
+
+.swipe-btn.right{left:auto;right:auto;top:auto;bottom:auto;grid-column:3;grid-row:2 / span 2;height:auto;align-self:stretch}
+
+.reset-btn{position:relative;left:0;top:-3px;justify-self:center;align-self:center;grid-column:3;grid-row:4;width:39px;height:39px;border-radius:50%;border:1px solid rgba(170,200,255,.45);background:linear-gradient(145deg,rgba(100,140,210,.4),rgba(40,60,100,.22));color:#dce7ff;font-size:10px;font-weight:800;line-height:1;box-shadow:inset 2px 2px 4px #ffffff22,inset -3px -3px 5px #0008,0 3px 0 #080d17,0 5px 9px #0008;cursor:pointer}
+
+.practical-btn{z-index:50;pointer-events:auto;touch-action:manipulation;position:relative;left:-39px;top:-3px;justify-self:center;align-self:center;grid-column:3;grid-row:4;width:39px;height:39px;border-radius:50%;border:1px solid rgba(170,200,255,.45);background:linear-gradient(145deg,rgba(100,140,210,.4),rgba(40,60,100,.22));color:#dce7ff;font-size:10px;font-weight:800;line-height:1;box-shadow:inset 2px 2px 4px #ffffff22,inset -3px -3px 5px #0008,0 3px 0 #080d17,0 5px 9px #0008;cursor:pointer}
+.practical-btn.active{border-color:#ffd27a;box-shadow:0 0 0 .5px #ffd27a}
+.practical-btn:active{transform:translateY(2px)}
+
+.set-btn{position:relative;left:39px;top:-3px;justify-self:center;align-self:center;grid-column:3;grid-row:4;width:39px;height:39px;border-radius:50%;border:1px solid rgba(170,200,255,.45);background:linear-gradient(145deg,rgba(100,140,210,.4),rgba(40,60,100,.22));color:#dce7ff;font-size:16px;font-weight:800;line-height:1;box-shadow:inset 2px 2px 4px #ffffff22,inset -3px -3px 5px #0008,0 3px 0 #080d17,0 5px 9px #0008;cursor:pointer}
+
+.reset-btn:active,.set-btn:active{transform:translateY(2px);box-shadow:inset 2px 2px 4px #ffffff18,inset -2px -2px 4px #0008,0 1px 0 #080d17,0 3px 6px #0008}
+
+/* CoF wheel and chart drag handle. Keep the wheel at its original 172.5px canvas size. */
+.key-wheel-wrap{display:flex!important;width:172.5px;height:172.5px;position:fixed;z-index:30;left:50%;top:calc(50% - 86.25px);bottom:auto;transform:translateX(-50%);align-items:stretch;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;filter:drop-shadow(0 9px 15px #000b)}
+
+.key-wheel-wrap.dragging,.swipe-pad.dragging{cursor:grabbing}
+
+.motion-indicator{pointer-events:auto;cursor:grab}
+
+.swipe-pad{cursor:grab}
+
+/* Flat wheel layout: the wheel, formula, and controls occupy separate columns. */
+.key-wheel-wrap{width:224.25px;height:224.25px;left:18px;top:calc(50% - 148.6px);transform:none;filter:drop-shadow(0 12px 18px #000b)}
+
+.motion-indicator{position:fixed;left:calc(50% + 91.7px);top:calc(50% - 124px);z-index:26;pointer-events:auto;cursor:grab}
+/* In the standalone triad formula box only, rotate movement triangles to horizontal. */
+#motionIndicator .motion-triangle{transform:rotate(90deg) scaleX(.95)}
+
+/* Default layout: bar on top, wheel left, formula box right of the wheel, button pad centred below the wheel. */
+.swipe-pad{left:calc(50% - 60px);right:auto;top:calc(50% + 120px)}
+/* Circle buttons stacked vertically to the right of the pad, 8px apart and 6px from the buttons (same gaps as the pad grid). */
+.swipe-pad{width:114px;grid-template-columns:repeat(3,34px);justify-content:start}
+.practical-btn,.reset-btn,.set-btn{position:absolute;left:180px;grid-column:auto;grid-row:auto;justify-self:auto;align-self:auto}
+.practical-btn{top:3px}
+.reset-btn{top:50px}
+.set-btn{top:97px}
+/* Bigger, bolder symbols on the circle buttons */
+.reset-btn{font-size:22px;font-weight:900;color:#fff;padding:0;text-shadow:0 1px 2px #16336bcc}
+.set-btn{font-size:22px;font-weight:900;color:#fff;padding:0;text-shadow:0 1px 2px #16336bcc}
+.practical-btn{font-size:26px;font-weight:900;color:#fff;padding:0;text-shadow:0 1px 2px #16336bcc}
+/* ≈ drawn as an SVG so it is centred exactly on the button face on every device/font */
+.practical-btn{display:flex;align-items:center;justify-content:center}
+.practical-btn .approx-icon{width:15px;height:12.7px;display:block;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;filter:drop-shadow(0 1px 1px #16336bcc)}
+/* M, m, b, # symbols sized to match the circle-button symbols */
+.swipe-btn.up .btn-label,.swipe-btn.down .btn-label,.swipe-btn.left .btn-label,.swipe-btn.right .btn-label{font-size:22px;font-weight:900}
+/* aug (+), dim (°), s2 and s4 face symbols, sized to match the M, m, b, # symbols */
+.swipe-btn.aug .btn-label,.swipe-btn.dim .btn-label,.swipe-btn.sus2 .btn-label,.swipe-btn.sus4 .btn-label{font-size:22px;font-weight:900}
+.swipe-btn.dim .btn-label{font-size:28px;transform:translateY(3px)}
+/* Row colour groups: top (sus4, aug) violet, middle (#, M, b) original blue glass, bottom (m, dim, sus2) teal. */
+.swipe-btn.sus4,.swipe-btn.aug{background:linear-gradient(145deg,rgba(190,140,255,.42) 0%,rgba(140,90,230,.16) 52%,rgba(110,60,200,.3) 100%)}
+.swipe-btn.sus4:not(.active),.swipe-btn.aug:not(.active){border-color:rgba(215,185,255,.45);box-shadow:inset 2px 2px 4px #ffffff55,inset -3px -3px 5px #4a208d88,0 6px 10px #0008}
+.swipe-btn.sus4:not(.active):active,.swipe-btn.aug:not(.active):active{box-shadow:inset 2px 2px 4px #ffffff44,inset -2px -2px 4px #4a208d88,0 3px 6px #0008}
+.swipe-btn.down,.swipe-btn.dim,.swipe-btn.sus2{background:linear-gradient(145deg,rgba(90,215,185,.4) 0%,rgba(50,170,150,.16) 52%,rgba(30,140,125,.3) 100%)}
+.swipe-btn.down:not(.active),.swipe-btn.dim:not(.active),.swipe-btn.sus2:not(.active){border-color:rgba(160,240,220,.45);box-shadow:inset 2px 2px 4px #ffffff55,inset -3px -3px 5px #0f5a5088,0 6px 10px #0008}
+.swipe-btn.down:not(.active):active,.swipe-btn.dim:not(.active):active,.swipe-btn.sus2:not(.active):active{box-shadow:inset 2px 2px 4px #ffffff44,inset -2px -2px 4px #0f5a5088,0 3px 6px #0008}
+/* No text selection, carets, callout menus or magnifier loupes anywhere */
+html,body,body *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none;caret-color:transparent}
+
+::selection{background:transparent}
+
+::-moz-selection{background:transparent}
+/* Two-ring circle of fifths: major keys outside, relative minors inside. */
+.wheel-disc{position:relative;width:100%;height:100%;display:block;border-radius:50%;background:#111419;flex:none;overflow:visible}
+#keyWheel{position:relative;width:100%;height:100%;display:block;overflow:visible}
+.wheel-base{fill:#111419;stroke:#2a2c32;stroke-width:.25}
+.wheel-sector{cursor:pointer;stroke:#0a0b0d;stroke-width:.26;stroke-linejoin:round}
+.wheel-label{paint-order:stroke;stroke:rgba(0,0,0,.4);stroke-width:.5px;font-weight:800;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.wheel-label.outer{font-size:9.2px}.wheel-label.inner{font-size:5.8px}
+.wheel-center{fill:url(#wheelCenterGradient);stroke:#08090b;stroke-width:.5}
+.wheel-center-ring{fill:none;stroke:#d6544a;stroke-width:.5;pointer-events:none}
+.wheel-center-label{fill:#ca4f45;font-weight:800;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+/* Vertical triad note bar: one block per chord, root label (underlined) with its three notes on one line below. Hold to move. */
+.note-bar{--chord-accent:#6cc4ff;position:fixed;left:8px;bottom:8px;top:auto;width:max-content!important;height:auto!important;z-index:12;display:flex;flex-direction:column;padding:4px 7px;border:var(--line) solid rgba(67,139,255,.8);border-radius:9px;background:var(--bar-bg);box-shadow:0 10px 18px rgba(0,0,0,.95),0 3px 6px rgba(0,0,0,.9);touch-action:none;pointer-events:auto;cursor:grab;user-select:none;-webkit-user-select:none}
+.note-bar.dragging{cursor:grabbing;box-shadow:0 16px 26px #000,0 4px 8px #000}
+.note-motion{display:grid;grid-template-columns:repeat(var(--n,3),minmax(0,1fr));grid-template-rows:repeat(2,27px);margin:calc(-4px) -7px 4px;border-bottom:var(--line) solid var(--blue);border-radius:calc(9px - var(--line)) calc(9px - var(--line)) 0 0;pointer-events:none}
+.note-motion .motion-cell{border-right:var(--line) solid var(--blue);border-bottom:var(--line) solid var(--blue);font-size:calc(var(--font)*.86);font-weight:500}
+.note-motion .motion-cell.lc{border-right:0}
+.note-motion .motion-cell.r2{border-bottom:0}
+.note-motion .motion-triangle{font-size:15px}
+.note-chord{display:flex;flex-direction:column;align-items:center;gap:2px;padding:1px 0 0;min-width:0}
+.note-chord+.note-chord{border-top:var(--line) solid transparent} /* the old faint separator is replaced by the shared outline below */
+/* Outline around each triad block (chord label + notes + degree boxes): 2x the normal line thickness.
+   Drawn as an overlay so layout is unchanged; neighbouring triads share one 2x line, the first triad's top line sits on the header rule,
+   and the last triad's bottom line follows the bar's own rounded edge. */
+.note-chord{position:relative}
+.note-chord::after{content:"";position:absolute;left:calc(-7px - var(--line));right:calc(-7px - var(--line));top:0;bottom:0;box-sizing:border-box;border:calc(2*var(--line)) solid var(--blue);pointer-events:none}
+.note-motion+.note-chord::after{top:calc(-4px - var(--line))}
+.note-chord+.note-chord::after{top:calc(-2*var(--line))}
+.note-chord:last-child{margin-bottom:-4px}
+.note-chord:last-child::after{bottom:calc(-1*var(--line));border-radius:0 0 9px 9px}
+/* Header (R 3 5 + arrows) at the top of the bar: its top and side outside lines are 2x too, following the bar's rounded corners; its bottom line is the first triad's top line above. */
+.note-motion{position:relative}
+.note-motion::after{content:"";position:absolute;left:calc(-1*var(--line));right:calc(-1*var(--line));top:calc(-1*var(--line));bottom:0;box-sizing:border-box;border:calc(2*var(--line)) solid var(--blue);border-bottom:0;border-radius:9px 9px 0 0;pointer-events:none}
+.note-root{display:inline-block;font-size:calc(var(--font) + 1px);font-weight:800;line-height:1;color:var(--chord-accent);white-space:nowrap}
+.note-col{display:flex;flex-direction:column;align-items:center;gap:0;min-width:0;width:100%;box-sizing:border-box;border-right:var(--line) solid var(--blue);border-bottom:0}
+.note-deg{box-sizing:border-box;display:flex;align-items:center;justify-content:center;width:100%;font-size:calc(var(--font)*.85);font-weight:600;line-height:1;color:var(--fg);opacity:.65;border-top:0;padding:2px 0 3px;height:27px;overflow:visible} /* fixed height: a flat/sharp glyph in the degree label (b7) must never make the row taller */
+.note-deg.degree-rule{border-bottom:var(--line) solid var(--blue);height:27px} /* same 27px as the note rows (the rule is inside the height, not added to it) */
+.note-list{display:grid;grid-template-columns:repeat(var(--n,3),minmax(0,1fr));gap:0;width:calc(var(--n,3)*var(--bw,32.84px));min-width:0;align-self:center;margin:1px -7px 0;/* every box is exactly --bw wide in every state; the bar is as wide as its columns (a 4th column adds one box), the list spans the bar edge to edge */font-size:var(--font);font-weight:500;line-height:1;color:var(--fg);white-space:nowrap}
+/* Each note column now carries its vertical divider through the degree label to the bottom blue rule. */
+.note-n{box-sizing:border-box;width:100%;height:27px;display:flex;align-items:center;justify-content:center;border-top:var(--line) solid var(--blue);border-bottom:var(--line) dashed var(--blue);/* dashed rule between every note and its degree label */border-right:0}
+.note-col:last-child{border-right:0}
+.note-root{align-self:center;display:flex;flex-wrap:wrap;align-items:baseline;align-content:center;justify-content:center;white-space:nowrap;height:var(--root-h,auto)} /* chord-name box: one fixed height for every chord quality (set by lockNoteBarSize), so the bar never changes height and no slack opens under the last chord */
+/* The three circle buttons (≈, reset, 4) are their own stack, separate from the triad buttons. Hold to move. */
+.circle-stack{position:fixed;left:calc(50% + 120px);top:calc(50% + 123px);width:39px;z-index:36;display:flex;flex-direction:column;align-items:center;gap:14px;touch-action:none;pointer-events:auto;cursor:grab;user-select:none;-webkit-user-select:none}
+.circle-stack.dragging{cursor:grabbing}
+/* Dragged to the bottom edge of the screen: the circle buttons lay out in a row; dragged away, back to a column. */
+.circle-stack.horiz{flex-direction:row}
+.circle-stack .practical-btn,.circle-stack .reset-btn,.circle-stack .set-btn{position:relative;left:0;top:0;flex:none;grid-column:auto;grid-row:auto;justify-self:auto;align-self:auto}
+/* Slightly 3D, still sharp pad buttons: small corner radius, subtle top-lit gradient, bevel highlight, solid bottom edge like a keycap. No blur, no gloss. */
+.swipe-pad .swipe-btn{--face-top:#2a457b;--face:#223966;--edge:#0a0f1a;--line:#6b92dc;background:linear-gradient(180deg,var(--face-top) 0%,var(--face) 100%);border:1px solid var(--line);border-radius:5px;-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(0,0,0,.22),0 3px 0 var(--edge),0 6px 9px rgba(0,0,0,.95),0 9px 14px rgba(0,0,0,.7);transition:transform .06s,box-shadow .06s}
+.swipe-pad .swipe-btn:active{transform:translateY(2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),inset 0 -1px 0 rgba(0,0,0,.2),0 1px 0 var(--edge),0 2px 4px rgba(0,0,0,.95)}
+.swipe-pad .swipe-btn .btn-label{text-shadow:0 1px 0 rgba(0,0,0,.45)}
+/* Row colour groups: top (s4, +) violet, middle (#, M, b) blue, bottom (m, °, s2) teal. */
+.swipe-pad .swipe-btn.sus4,.swipe-pad .swipe-btn.aug{--face-top:#2a457b;--face:#223966;--edge:#0a0f1a;--line:#6b92dc} /* same blue as M */
+.swipe-pad .swipe-btn.down,.swipe-pad .swipe-btn.dim,.swipe-pad .swipe-btn.sus2{--face-top:#1e6662;--face:#16524b;--edge:#0a0f1a;--line:#63cdb9}
+/* Beat the older glass rules (which set their own background, border and shadow on these buttons). */
+.swipe-pad .swipe-btn.sus4:not(.active),.swipe-pad .swipe-btn.aug:not(.active),.swipe-pad .swipe-btn.down:not(.active),.swipe-pad .swipe-btn.dim:not(.active),.swipe-pad .swipe-btn.sus2:not(.active){background:linear-gradient(180deg,var(--face-top) 0%,var(--face) 100%);border-color:var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(0,0,0,.22),0 3px 0 var(--edge),0 6px 9px rgba(0,0,0,.95),0 9px 14px rgba(0,0,0,.7)}
+.swipe-pad .swipe-btn.sus4:not(.active):active,.swipe-pad .swipe-btn.aug:not(.active):active,.swipe-pad .swipe-btn.down:not(.active):active,.swipe-pad .swipe-btn.dim:not(.active):active,.swipe-pad .swipe-btn.sus2:not(.active):active{transform:translateY(2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),inset 0 -1px 0 rgba(0,0,0,.2),0 1px 0 var(--edge),0 2px 4px rgba(0,0,0,.95)}
+/* Sharp / flat / double signs on the triad notes (note bar and top triad bar) are 3px smaller than the note letters. Degree labels are untouched. */
+.note-acc{font-size:var(--font)} /* vertical bar accidentals: exactly the size the top bar accidentals were before the latest +3px */
+/* Same 3px reduction for the sharp/flat in the chord names (top labels and note bar headings). */
+.label-acc{font-size:calc(1em - 3px)}
+.chord-labels .label-acc{font-size:calc(1em - 1px)} /* sharp / flat in the top chord labels: 2px larger than before */
+/* Double flats (𝄫) are a further 1px smaller than the other accidentals, wherever they appear. */
+.dbl-flat{font-size:calc(1em - 1px)}
+.acc-stack .triad-cell{font-size:calc(var(--font) + 3px)} /* top triad bar accidentals: 3px bigger again (the vertical note bar is separate) */
+/* Note bar header: the arrow row is the same height as the degree boxes, and the line between the R 3 5 row and the arrow row is dashed like the other rules. */
+.note-motion{grid-template-rows:27px 27px}
+.note-motion .motion-cell.r1{border-bottom:var(--line) dashed var(--blue)}
+/* Selected button: blue outline around the same raised key. */
+.swipe-pad .swipe-btn.active,.swipe-pad .swipe-btn.active:active{border-color:#ffd27a;box-shadow:0 0 0 .5px #ffd27a,inset 0 -1px 2px 1px var(--halo,transparent),inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(0,0,0,.22),0 5px 0 #000,0 9px 12px #000,0 16px 24px rgba(0,0,0,.95)}
+/* Chord name labels (top triad bar and note bar) are white. */
+.chord-labels{color:#fff}
+.note-bar{--chord-accent:#fff}
+.note-root{color:#fff}
+/* One shared divider between chords: drop each chord's bottom border so the line above every chord name is a single line, same thickness as the one above the first chord. */
+.note-chord:not(:last-child)::after{border-bottom:0}
+/* Chord-quality box: same size and outline as a chord-name box in the note bar, shows the quality without the root (M, m, °, +, sus2, msus4 ...). Hold to move. */
+.quality-box{position:fixed;left:128px;top:502px;z-index:27;box-sizing:border-box;width:104px;height:27px;display:flex;align-items:center;justify-content:center;border:calc(2*var(--line)) solid var(--blue);border-radius:9px;background:var(--bar-bg);box-shadow:0 10px 18px rgba(0,0,0,.95),0 3px 6px rgba(0,0,0,.9);color:#fff;font-size:calc(var(--font) + 1px);font-weight:800;line-height:1;white-space:nowrap;touch-action:none;pointer-events:auto;cursor:grab;user-select:none;-webkit-user-select:none}
+/* # + maj7 all active, and only then: the whole quality text (#+M7) is 6px smaller. */
+.quality-box.sharp-aug-maj7 .quality-text{font-size:1em} /* same size as every other quality name (it used to be 6px smaller) */
+/* # or b with + and maj7: the accidental is 3px smaller and the whole text is tucked tighter (kept just clear so no two glyphs touch). */
+.quality-box.aug-maj7-acc .quality-text{letter-spacing:-.06em}
+.quality-box.aug-maj7-acc .quality-text .label-acc{font-size:1.1em;margin-right:0}
+.quality-text .label-acc{font-size:1em;margin-right:.04em}
+.quality-text .label-acc.lone.sharp{position:relative;top:-.17em} /* the ♯ glyph sits low in its line box: lift it so it has the same room below as the ♭ */
+.quality-text .label-acc.lone{font-size:1.05em;line-height:1;margin:0} /* a lone ♯ / ♭ must sit fully inside the box (it was 1.35em and ran over the top and bottom edges) */
+.quality-box.dragging{cursor:grabbing;box-shadow:0 16px 26px #000,0 4px 8px #000}
+/* b / # pitch colours (muted so the yellow selected outline stays visible): # = dusty sky (higher), b = deep indigo (lower). */
+.swipe-pad .swipe-btn.right{--face-top:#2f5f74;--face:#285060;--edge:#0a0f1a;--line:#72b7cd} /* halfway between m and s4 */
+.swipe-pad .swipe-btn.left{--face-top:#204660;--face:#19394e;--edge:#0a0f1a;--line:#5891af} /* halfway between the M blue and the (darker) s2 teal */
+/* Triad formula box: outer line is as thick as the other bars' outer lines, and its vertical divider is dashed like theirs. */
+.motion-indicator{border-width:calc(2*var(--line))}
+#motionIndicator .formula-cell{border-right-style:dashed}
+/* Top triad bar: the line between each note and its accidental column is dashed like the other bars' dashed lines. */
+/* Drawn as a gradient strip instead of a 1px dashed border: dashed borders can vanish on fractional column widths / high-DPR phone screens. */
+.triad-bar .note-stack{border-right-color:transparent}
+.triad-bar .acc-stack{position:relative}
+.triad-bar .acc-stack::before{content:"";position:absolute;left:calc(-1*var(--line));top:0;bottom:0;width:var(--line);background:repeating-linear-gradient(to bottom,var(--blue) 0 3px,transparent 3px 6px);pointer-events:none}
+/* No dark trim around the circle of fifths: no base ring, no dark disc behind it, no drop shadow. */
+.wheel-base{display:none}
+.wheel-disc{background:transparent}
+/* Every item floats above the canvas and above the items beneath it: a soft shadow under each one (wheel, top triad bar, note bar, formula box, quality box, pad buttons, circle buttons). */
+.key-wheel-wrap{filter:drop-shadow(0 9px 12px rgba(0,0,0,.95)) drop-shadow(0 3px 4px rgba(0,0,0,.85))}
+.key-wheel-wrap.dragging{filter:drop-shadow(0 14px 20px #000) drop-shadow(0 4px 6px #000)}
+.triad-bar{box-shadow:0 10px 18px rgba(0,0,0,.95),0 3px 6px rgba(0,0,0,.9)}
+.motion-indicator{box-shadow:0 10px 18px rgba(0,0,0,.95),0 3px 6px rgba(0,0,0,.9)}
+.motion-indicator.dragging{box-shadow:0 16px 26px #000,0 4px 8px #000}
+/* + (aug) and s4 (sus4) keep the normal button shadow, but paint beneath the buttons below them so it never lands on M or #. */
+.swipe-pad .swipe-btn.sus4:not(.active),.swipe-pad .swipe-btn.aug:not(.active){z-index:-1}
+/* Active buttons all sit at one height: a button lower on the pad paints above the shadows of the active buttons above it, so e.g. # is never darkened by s4's shadow. */
+.swipe-pad .swipe-btn.active.sus4,.swipe-pad .swipe-btn.active.aug{z-index:3}
+.swipe-pad .swipe-btn.active.up{z-index:4}
+.swipe-pad .swipe-btn.active.left,.swipe-pad .swipe-btn.active.right{z-index:5}
+.swipe-pad .swipe-btn.active.down{z-index:6}
+.swipe-pad .swipe-btn.active.sus2,.swipe-pad .swipe-btn.active.dim{z-index:7}
+/* Picked up (held to move): every item lifts - deeper, wider shadow. Top triad bar, circle controls and pad buttons get the same lift as the wheel, note bar, formula box and quality box. */
+#bottomWrap.dragging .triad-bar{box-shadow:0 16px 26px #000,0 4px 8px #000}
+/* Pad buttons and circle controls while held: the exact same drop shadow the note bar, formula box, quality box and triad bar use when picked up (0 16px 26px #000 + 0 4px 8px #000); each button keeps its own edge slab. */
+.swipe-pad.dragging .swipe-btn:not(.active){box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(0,0,0,.22),0 3px 0 var(--edge),0 16px 26px #000,0 4px 8px #000!important}
+.swipe-pad.dragging .swipe-btn.active{box-shadow:0 0 0 .5px #ffd27a,inset 0 -1px 2px 1px var(--halo,transparent),inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(0,0,0,.22),0 5px 0 #000,0 16px 26px #000,0 4px 8px #000!important}
+.circle-stack.dragging .practical-btn:not(.active),.circle-stack.dragging .reset-btn,.circle-stack.dragging .set-btn{box-shadow:inset 2px 2px 4px rgba(255,255,255,.133),inset -3px -3px 5px rgba(0,0,0,.533),0 3px 0 #080d17,0 8px 13px rgba(0,0,0,.55),0 2px 4px rgba(0,0,0,.5)!important}
+.circle-stack.dragging .practical-btn.active{box-shadow:0 0 0 .5px #ffd27a,inset 2px 2px 4px rgba(255,255,255,.133),inset -3px -3px 5px rgba(0,0,0,.533),0 3px 0 #080d17,0 8px 13px rgba(0,0,0,.55),0 2px 4px rgba(0,0,0,.5)!important}
+/* Circle-of-fifths show/hide button (4th circle control). */
+.wheel-btn{display:flex;align-items:center;justify-content:center;padding:0}
+.wheel-btn .wheel-icon{width:21px;height:21px;display:block;fill:none;stroke:#fff;stroke-width:1.5;stroke-linecap:round;pointer-events:none;filter:drop-shadow(0 1px 1px #16336bcc);transition:opacity .2s}
+.wheel-btn.off .wheel-icon{opacity:.38}
+/* Chord-bar view button (top of the circle stack): the picture shows which bars are on; the hidden one is dimmed. */
+.bars-btn .bt,.bars-btn .bn{transition:opacity .2s}
+.bars-btn.m-top .bn,.bars-btn.m-note .bt{opacity:.3}
+.bar-off{visibility:hidden!important;opacity:0!important;pointer-events:none!important} /* hidden but keeps its place, so nothing moves */
+.key-wheel-wrap{transition:opacity .2s,visibility 0s}
+.key-wheel-wrap.wheel-hidden{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s,visibility 0s .2s}
+/* Triad formula box attached to the far left of the top triad bar: one unit, rows line up, left corners rounded. The bar's columns are as wide as the box's (--cw). */
+.bar-row{display:flex;align-items:stretch;width:100%;border-radius:9px;box-shadow:0 10px 18px rgba(0,0,0,.95),0 3px 6px rgba(0,0,0,.9)}
+#bottomWrap.dragging .bar-row{box-shadow:0 16px 26px #000,0 4px 8px #000}
+#bottomWrap .triad-bar,#bottomWrap.dragging .triad-bar{flex:1 1 auto;width:auto;min-width:0;order:1;border-right:0;border-radius:9px 0 0 9px;box-shadow:none}
+#bottomWrap .motion-indicator{position:relative;left:auto;top:auto;z-index:auto;flex:none;box-sizing:content-box;width:calc(2*var(--cw));height:calc(var(--rows,3)*var(--cell));grid-template-columns:repeat(2,var(--cw));grid-template-rows:repeat(var(--rows,3),var(--cell));order:2;border-radius:0 9px 9px 0;box-shadow:none;pointer-events:auto;cursor:inherit}
+#bottomWrap .chord-labels{width:auto;margin-left:calc(2*var(--line));margin-right:calc(2*var(--cw) + 4*var(--line))}
+/* ---- Seventh chords: 7 (b7) and maj7 buttons in a 4th pad column, plus a 4th note row/column when one is selected. ---- */
+.triad-cell.extra,.motion-cell.extra{display:none} /* rows 4-5 (the 7th and the 9 / 11 / 13 note) appear only when the chord has that many notes (html[data-n]) */
+html[data-n="4"] .e3,html[data-n="5"] .e3,html[data-n="6"] .e3,html[data-n="7"] .e3{display:flex}
+html[data-n="5"] .e4,html[data-n="6"] .e4,html[data-n="7"] .e4{display:flex}
+html[data-n="6"] .e5,html[data-n="7"] .e5{display:flex}
+html[data-n="7"] .e6{display:flex}
+html[data-n="3"] .note-stack .triad-cell:nth-child(3),html[data-n="3"] .acc-stack .triad-cell:nth-child(3),html[data-n="3"] .motion-cell[style*="grid-row:3"]{border-bottom:0}
+html[data-n="4"] .note-stack .triad-cell:nth-child(4),html[data-n="4"] .acc-stack .triad-cell:nth-child(4),html[data-n="4"] .motion-cell[style*="grid-row:4"]{border-bottom:0}
+html[data-n="5"] .note-stack .triad-cell:nth-child(5),html[data-n="5"] .acc-stack .triad-cell:nth-child(5),html[data-n="5"] .motion-cell[style*="grid-row:5"]{border-bottom:0}
+html[data-n="6"] .note-stack .triad-cell:nth-child(6),html[data-n="6"] .acc-stack .triad-cell:nth-child(6),html[data-n="6"] .motion-cell[style*="grid-row:6"]{border-bottom:0}
+html[data-n="7"] .motion-cell[style*="grid-row:7"]{border-bottom:0}
+#btnSet{display:flex;align-items:center;justify-content:center;padding:0}
+.set-icon{width:28px;height:28px;display:block;fill:none;stroke:#fff;stroke-width:1.1;stroke-opacity:1;pointer-events:none;filter:drop-shadow(0 1px 1px #16336bcc)}
+.set-icon #btnSetIcon *{stroke-opacity:1}
+/* Circle-of-fifths button: same soft, thin-ringed look as the 4/5 button, but with the twelve spokes and a faint tinted band instead of a coloured arc, so the two are not mixed up. */
+.wheel-btn .wheel-icon.wheel-face{width:28px;height:28px;stroke-width:1.1;stroke-opacity:1}
+.wheel-face circle:first-child{fill:#fff;fill-opacity:.1}
+.wheel-face path{stroke-width:.8;stroke-opacity:.85}
+.full-btn.on{border-color:#ffd27a;box-shadow:0 0 0 .5px #ffd27a}
+.full-btn.na .full-icon{opacity:.6} /* only the face dims while 11 / 13 is off, the button itself stays as bright as the others */
+#btnFull{display:flex;align-items:center;justify-content:center;padding:0}
+.full-icon{width:26px;height:26px;display:block;fill:#fff;pointer-events:none;filter:drop-shadow(0 1px 1px #16336bcc)}
+.swipe-pad{width:232px;grid-template-columns:repeat(5,34px)} /* 3 triad columns + the 7th column + the 9 / 11 / 13 column, 6px apart */
+.swipe-btn.sevmaj,.swipe-btn.sev7,.swipe-btn.sev6,.swipe-btn.sevx{left:17px} /* half a button of extra space between the triad-type buttons and the purple buttons; the purple columns keep the normal 6px gap */
+.swipe-btn.x13{grid-column:5;grid-row:1} /* high to low, like the 7th column: 13 on top, 9 at the bottom */
+.swipe-btn.x11{grid-column:5;grid-row:2}
+.swipe-btn.x9{grid-column:5;grid-row:3}
+/* maj7 / 7 / 6 sit in rows 1-3, so the bottom of 6 lines up with the bottom of the # button (which spans rows 2-3) */
+.swipe-btn.sevx{left:19px;top:-42px} /* 13 / 11 / 9 sit right beside maj7 / 7 / 6 (outlines 2px apart, no overlap) and one row higher */
+.swipe-pad .swipe-btn.sevx:active{top:-40px} /* the pressed-key nudge keeps the column's position */
+.swipe-btn.sevx .btn-label{font-size:20px;font-weight:900;letter-spacing:-.5px}
+.swipe-btn.sevmaj{grid-column:4;grid-row:1}
+.swipe-btn.sev7{grid-column:4;grid-row:2}
+.swipe-btn.sev6{grid-column:4;grid-row:3}
+.swipe-btn.sev7 .btn-label,.swipe-btn.sev6 .btn-label{font-size:22px;font-weight:900}
+.swipe-btn.sevmaj .btn-label{font-size:12px;font-weight:900;letter-spacing:-.2px}
+/* b, #, 6 and 7 looked smaller than the other buttons: bigger labels */
+.swipe-btn.left .btn-label,.swipe-btn.right .btn-label,.swipe-btn.sev7 .btn-label,.swipe-btn.sev6 .btn-label{font-size:27px}
+.swipe-pad .swipe-btn.sev7,.swipe-pad .swipe-btn.sev6,.swipe-pad .swipe-btn.sevmaj,.swipe-pad .swipe-btn.sevx{--face-top:#4c3579;--face:#3b2a60;--edge:#0a0f1a;--line:#a58be0}
+.swipe-pad .swipe-btn.sev6{--face-top:#8d4066;--face:#6e2e4f;--line:#e89bc0} /* 6 works on its own: rose */
+.swipe-pad .swipe-btn.sevx{--face-top:#67529a;--face:#523f84;--line:#cdbcf7} /* 13 / 11 / 9: lighter violet than maj7 / 7 */
+.swipe-pad .swipe-btn.sev7:not(.active),.swipe-pad .swipe-btn.sev6:not(.active),.swipe-pad .swipe-btn.sevmaj:not(.active),.swipe-pad .swipe-btn.sevx:not(.active){background:linear-gradient(180deg,var(--face-top) 0%,var(--face) 100%);border-color:var(--line)}
+.swipe-pad .swipe-btn.active.sev7,.swipe-pad .swipe-btn.active.sevmaj{z-index:6}
+.label-suffix.long-sfx{font-size:.68em}
+.label-root-acc.small-sfx .label-suffix.maj-sfx{font-size:.68em} /* maj7 / M7sus-style text in the top chord labels: 3px smaller, only while the label would be cut off */
+.label-root-acc.small-sfx .label-suffix.has-sus{font-size:.9em}
+/* + and maj7 both active: everything after the root note (sharp/flat and the +M7 text) in the top labels is 3px smaller */
+.chord-labels.aug-maj7 .label-suffix{font-size:calc(.9em - 3px)}
+.chord-labels.aug-maj7 .label-acc{font-size:calc(1em - 4px)}
+/* # + maj7 all active, and only then: the M7 in the top labels is 3px smaller. */
+.chord-labels.sharp-aug-maj7 .label-suffix .m7{font-size:calc(1em - 3px)}
+/* + , maj7 and 13 active (+M13), and only then: the M13 text in the top labels is 2px smaller; the + keeps its size. */
+.chord-labels.sharp-aug-b7-13 .label-suffix{font-size:calc(.9em - 2px)} /* # + 7 + 13, and only then: text after the # is 2px smaller */
+.chord-labels.flat-aug-maj7 .label-suffix{font-size:calc(.9em - 5px)} /* b + maj7, and only then: text after the b is 2px smaller than the +M7 size */
+.chord-labels.flat-aug-maj7 .label-acc{font-size:calc(1em - 3px)} /* ...and the b is 1px larger */
+.chord-labels.aug-maj13 .label-suffix .m7{font-size:calc(1em - 2px)}
+/* # (or b), s2 (or s4) and maj7 all active, and only then: the quality text after the accidental is angled 30 degrees up to the right. The root and accidental stay level. */
+.chord-labels.sus-maj7-alt .label-suffix,.chord-labels.sharp-aug-ext-alt .label-suffix{display:inline-block;transform-origin:0 100%;transform:translateY(-.3em) rotate(-30deg);margin-left:calc(.2em + 3px);letter-spacing:.06em} /* room between the root / sharp / flat and the angled text, and between its characters */
+/* # + maj7: the 7 in "maj7" in the top labels is larger (the maj stays as it is). */
+/* m + maj7 (mM7): the m and M in the top labels are 3px smaller; the 7 is unchanged. */
+.label-suffix .mm{font-size:calc(1em - 5px)}
+/* # or b with maj7 / 9 / 11 / 13 (any combination): the top labels always use the default size (no shrinking) */
+.chord-labels.full-size.full-size .label-suffix,.chord-labels.full-size.full-size .label-suffix.long-sfx,.chord-labels.full-size.full-size .label-root-acc .label-suffix.maj-sfx,.chord-labels.full-size.full-size .label-root-acc.small-sfx .label-suffix.maj-sfx{font-size:.9em}
+.chord-labels.full-size.full-size .label-suffix .m7,.chord-labels.full-size.full-size .label-suffix .mm{font-size:1em}
+.chord-labels.full-size.full-size .label-acc{font-size:calc(1em - 1px)}
+.chord-labels.full-size.full-size .label-suffix .sev{font-size:1em} /* # + maj7 + 9/11/13: the 13 / 11 / 9 is the same size as with b */
+.chord-labels.sharp-maj7 .label-suffix .sev{font-size:1.3em;line-height:1}
+/* In those same states, the sharp sign only (not the flat): 2px smaller and 1px lower. */
+.chord-labels.sus-maj7-sharp .label-acc{font-size:calc(1em - 3px);position:relative;top:3px}
+/* # (or b), 7 and s2 all active: the sharp / flat next to the root is 3px smaller */
+.chord-labels.sus2-7-alt .label-acc{font-size:calc(1em - 4px)}
+/* Pad keys, three heights: canvas < inactive keys < active keys. Inactive keys cast their shadow on the canvas only; every active key sits at the same height and casts the same shadow on the canvas and on the inactive keys beside it, but never on another active key.
+   Layers (pad stacking context): inactive shadows (z -1) < inactive faces < active shadow plates (z 2) < active faces (z 3). Earlier note: one shared shadow layer. Each key keeps only its hard keycap edge; the soft drop shadow is drawn by a pseudo-element
+   that sits beneath EVERY key in the pad, so no key's shadow can ever land on another key and all active keys sit at the same height.
+   (Replaces the old z-index ladder, which only moved the problem: whichever active key was lower on the ladder got shadowed by its neighbours.) */
+.swipe-pad .swipe-btn,.swipe-pad .swipe-btn.active,.swipe-pad .swipe-btn.sus4:not(.active),.swipe-pad .swipe-btn.aug:not(.active){z-index:auto!important}
+.swipe-pad .swipe-btn:not(.active){box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(0,0,0,.22),0 3px 0 var(--edge)!important}
+.swipe-pad .swipe-btn:not(.active):active{box-shadow:inset 0 1px 0 rgba(255,255,255,.2),inset 0 -1px 0 rgba(0,0,0,.2),0 1px 0 var(--edge)!important}
+.swipe-pad .swipe-btn.active{box-shadow:0 0 0 .5px #ffd27a,inset 0 -1px 2px 1px var(--halo,transparent),inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(0,0,0,.22),0 7px 0 rgba(0,0,0,.5)!important}
+.swipe-pad .swipe-btn:active{transform:none!important;top:2px} /* a transform would make the pressed key its own layer and lift its shadow above its neighbours */
+.swipe-pad .swipe-btn::before{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;box-shadow:0 5px 9px rgba(0,0,0,.533)}
+.swipe-pad .swipe-btn.active{z-index:3!important}
+.swipe-pad .swipe-btn.active::before{display:none}
+/* Shadow plates: an invisible twin of every key (same grid cell and size) that carries the active key's drop shadow one layer below the active faces. */
+.swipe-pad .swipe-btn.plate{z-index:2!important;background:none!important;border-color:transparent!important;box-shadow:none!important;pointer-events:none;transition:none}
+.swipe-pad .swipe-btn.plate::before{display:none}
+.swipe-pad .swipe-btn.plate.on{box-shadow:0 10px 12px rgba(0,0,0,.45),0 17px 22px rgba(0,0,0,.32)!important} /* active keys sit higher: the shadow reaches the keys beside and below them */
+/* While the pad is picked up: everything lifts with a deeper shadow, still never onto another active key. */
+.swipe-pad.dragging .swipe-btn:not(.active){box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(0,0,0,.22),0 3px 0 var(--edge)!important}
+.swipe-pad.dragging .swipe-btn.active{box-shadow:0 0 0 .5px #ffd27a,inset 0 -1px 2px 1px var(--halo,transparent),inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(0,0,0,.22),0 7px 0 rgba(0,0,0,.5)!important}
+.swipe-pad.dragging .swipe-btn:not(.active)::before{box-shadow:0 8px 13px rgba(0,0,0,.55),0 2px 4px rgba(0,0,0,.5)}
+.swipe-pad.dragging .swipe-btn.plate:not(.on){box-shadow:none!important}
+.swipe-pad.dragging .swipe-btn.plate.on{box-shadow:0 11px 14px rgba(0,0,0,.45),0 3px 5px rgba(0,0,0,.35)!important}
+/* Resting shadow depth: every item matches the circle buttons (edge 0 3px 0 #080d17 + soft 0 5px 9px). Picked-up (dragging) shadows stay deeper; active pad keys keep their raised shadow. */
+:root{--lift:0 3px 0 #080d17,0 5px 9px rgba(0,0,0,.533)}
+.bar-row,.note-bar,.quality-box{box-shadow:var(--lift)}
+.key-wheel-wrap{filter:drop-shadow(0 3px 0 #080d17) drop-shadow(0 5px 9px rgba(0,0,0,.533))}
+/* Picked-up shadow: every item uses exactly what the circle buttons use while held (edge 0 3px 0 #080d17 + 0 8px 13px + 0 2px 4px). */
+:root{--lift-drag:0 3px 0 #080d17,0 8px 13px rgba(0,0,0,.55),0 2px 4px rgba(0,0,0,.5)}
+.note-bar.dragging,.quality-box.dragging,.motion-indicator.dragging,#bottomWrap.dragging .bar-row{box-shadow:var(--lift-drag)}
+.key-wheel-wrap.dragging{filter:drop-shadow(0 3px 0 #080d17) drop-shadow(0 8px 13px rgba(0,0,0,.55)) drop-shadow(0 2px 4px rgba(0,0,0,.5))}
+/* Canvas is the dark blue; both chord bars are see-through. Shadows follow the fonts and lines only while a bar is being moved. */
+:root{--bg:#181f30}
+.triad-bar,#bottomWrap .motion-indicator,.note-bar,.quality-box{background:transparent!important}
+.bar-row,.triad-bar,.note-bar,.quality-box{box-shadow:none!important}
+#bottomWrap.dragging .bar-row,#bottomWrap.dragging .triad-bar,.note-bar.dragging,.quality-box.dragging{box-shadow:none!important}
+/* Resting on the canvas: a faint shadow on the lines and fonts, like the buttons' shadows. */
+#bottomWrap,.note-bar,.quality-box{filter:drop-shadow(0 3px 3px rgba(0,0,0,.4)) drop-shadow(0 1px 1px rgba(0,0,0,.3))}
+#bottomWrap.dragging,.note-bar.dragging,.quality-box.dragging{filter:drop-shadow(0 8px 5px rgba(0,0,0,.6)) drop-shadow(0 2px 2px rgba(0,0,0,.5))}
+/* Chord names never widen the note bar: the bar is exactly as wide as its columns (a 4th column adds one box). The name is shrunk by fitNoteRoots() until it fits. */
+.note-root{box-sizing:border-box;width:calc(100% + 14px);margin:0 -7px;padding:0 4px;contain:inline-size;flex-wrap:nowrap;justify-content:center;overflow:visible}
+.quality-box .quality-text{white-space:nowrap}
+/* Chord-quality box: the quality name on top, then a dashed rule and one degree label per note column (same columns, dashes and dividers as the note bar below). */
+.quality-box{flex-direction:column;justify-content:flex-start;align-items:stretch}
+.quality-main{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center}
+.quality-degrees{flex:none;display:grid;width:100%;box-sizing:border-box;border-top:var(--line) dashed var(--blue);height:27px;font-size:calc(var(--font)*.85);font-weight:600;line-height:1;color:var(--fg)}
+.quality-degrees .qd{display:flex;align-items:center;justify-content:center;min-width:0;padding:3px 0 4px;opacity:.65;border-right:var(--line) solid var(--blue);box-sizing:border-box}
+/* Triad arrows row under the degree labels: one cell per note column, copied from the formula box so it always matches the other bars. */
+.quality-arrows{flex:none;display:grid;width:100%;box-sizing:border-box;border-top:var(--line) dashed var(--blue);height:27px;font-size:calc(var(--font)*.85);line-height:1;color:#fff}
+.quality-arrows .qa{display:flex;align-items:center;justify-content:center;min-width:0;border-right:var(--line) solid var(--blue);box-sizing:border-box}
+.quality-arrows .qa:last-child{border-right:0}
+.quality-arrows .motion-triangle{font-size:calc(var(--font)*.85)}
+.quality-degrees .qd:last-child{border-right:0}
+.quality-box .deg-acc{font-size:calc(1em - 3px)}
+/* Note bar only: every sharp / flat sign is 3px smaller (note names, chord names and the degree labels). */
+.note-bar .note-acc{font-size:calc(var(--font) - 3px)}
+.note-bar .label-acc{font-size:1.1em} /* sharp / flat in the vertical bar's chord names: as big as the + and the other quality symbols */
+.note-bar .deg-acc{font-size:calc(1em - 3px)}
+/* Top row gets steadily lighter: M (original blue) < + < s4. */
+.swipe-pad .swipe-btn.aug{--face-top:#364e81;--face:#2e436e;--line:#759ade}
+.swipe-pad .swipe-btn.sus4{--face-top:#415886;--face:#3a4e75;--line:#80a1e1}
+/* Bottom row gets steadily darker: m (original teal) > dim > s2. */
+.swipe-pad .swipe-btn.dim{--face-top:#195753;--face:#124640;--line:#54ae9d}
+.swipe-pad .swipe-btn.sus2{--face-top:#154844;--face:#0f3935;--line:#458f82}
+/* maj7: exactly halfway between the 7 button's violet and the 13 / 11 / 9 buttons' lighter violet. */
+/* maj7 matches 11, and 7 matches 9. */
+.swipe-pad .swipe-btn.sevmaj{--face-top:#5b4989;--face:#493876;--line:#b4a5d9}
+/* 13 (original light violet) > 11 > 9: each step darker. */
+.swipe-pad .swipe-btn.x11{--face-top:#5b4989;--face:#493876;--line:#b4a5d9}
+.swipe-pad .swipe-btn.x9,.swipe-pad .swipe-btn.sev7{--face-top:#453666;--face:#362a58;--line:#9a8db9}
+.swipe-btn.x9 .btn-label{font-size:27px;letter-spacing:0} /* the single-digit 9 is as big as 6 and 7 (13 and 11 stay smaller to fit two digits) */
+/* Every movement triangle (formula box, note bar header, quality box) is the same size. */
+.motion-triangle,.note-motion .motion-triangle,.quality-arrows .motion-triangle{font-size:calc(var(--font)*.85)}
+
+/* Selected outline: identical on every raised key (bright gold + a soft dark shadow, about 2px deep and a touch heavier underneath, cast onto the gold from the key's edge). */
+.swipe-pad .swipe-btn{--halo-w:2px;--halo:rgba(0,0,0,.85)}
+/* Thin blue frames (same line as the triad bar): + and M together, s4 alone, m and dim together, s2 alone, b alone, # alone. Keys are 34px with 6px column / 8px row gaps (pitch 40 / 42); frames sit 3px outside the keys. z-index 1: above the resting keys and their shadows, below the active key (3) and its shadow plate (2). */
+.pad-frame{position:absolute;z-index:1;box-sizing:border-box;pointer-events:none;border:var(--line) solid var(--blue);border-radius:8px}
+/* 4px between neighbouring outlines (2px more than before): 2px above / below the keys, 1px to the sides */
+.pad-frame-aug{left:39px;top:-2px;width:36px;height:80px} /* + and M together */
+.pad-frame-s4{left:79px;top:-2px;width:36px;height:38px}
+.pad-frame-b{left:-1px;top:40px;width:36px;height:80px}
+.pad-frame-sharp{left:79px;top:40px;width:36px;height:80px}
+.pad-frame-mdim{left:39px;top:82px;width:36px;height:80px} /* m and dim together */
+.pad-frame-s2{left:-1px;top:124px;width:36px;height:38px}
+/* 7th / extension keys: columns start at x=137 (maj7 / 7 / 6) and x=194 (13 / 11 / 9, one row higher, 17px frame-to-frame from the 7th column like the triad group is from it). */
+.pad-frame-6{left:135px;top:82px;width:38px;height:38px}
+.pad-frame-7{left:135px;top:-2px;width:38px;height:80px} /* maj7 + 7 */
+.pad-frame-ext{left:177px;top:-44px;width:38px;height:122px} /* 4px between these outlines too, like the triad ones */ /* 13 / 11 / 9: 2px from the maj7 / 7 / 6 frames, one row higher */
+.motion-plus{font-size:calc(var(--font)*.85);font-weight:800;line-height:1;color:#fff}
+/* Performance: each draggable piece gets its own layer, so dragging it (or lighting a key) doesn't repaint the blurred shadows of everything else. */
+.swipe-pad,.note-bar,#bottomWrap,.key-wheel-wrap,#circleStack,.quality-box{will-change:transform}
+/* ---- Stack button: maj7 / 7 / 6 and 13 / 11 / 9 move on top of the triad buttons. Half a button (17px) between the two sets (frame to frame); the purple columns keep their 2px between outlines and the 13 / 11 / 9 column stays one row higher. ---- */
+.swipe-pad.stacked{width:114px;height:343px;grid-template-columns:repeat(3,34px);align-content:end} /* 160px of triad buttons + 17px gap + the purple block (124px frames + 42px step), grown upwards */
+.swipe-pad.stacked .swipe-btn.sevmaj,.swipe-pad.stacked .swipe-btn.sev7,.swipe-pad.stacked .swipe-btn.sev6{grid-column:1;left:38px;top:-141px} /* purple block is flush with the right side of the triad buttons: its right frame edge lines up with the # column's */
+.swipe-pad.stacked .swipe-btn.sevx{grid-column:1;left:80px;top:-183px}
+.swipe-pad.stacked .swipe-btn.sevmaj:active,.swipe-pad.stacked .swipe-btn.sev7:active,.swipe-pad.stacked .swipe-btn.sev6:active{top:-139px} /* the pressed-key nudge keeps the column's position */
+.swipe-pad.stacked .swipe-btn.sevx:active{top:-181px}
+.swipe-pad.stacked .pad-frame-aug,.swipe-pad.stacked .pad-frame-s4{top:181px}
+.swipe-pad.stacked .pad-frame-b,.swipe-pad.stacked .pad-frame-sharp{top:223px}
+.swipe-pad.stacked .pad-frame-mdim{top:265px}
+.swipe-pad.stacked .pad-frame-s2{top:307px}
+.swipe-pad.stacked .pad-frame-7{left:36px;top:40px}
+.swipe-pad.stacked .pad-frame-6{left:36px;top:124px}
+.swipe-pad.stacked .pad-frame-ext{left:78px;top:-2px}
+/* The stack button's icon shows the layout you are in: purple columns beside the triad block, or on top of it. */
+#btnStack{display:flex;align-items:center;justify-content:center;padding:0}
+.stack-icon{width:26px;height:26px;display:block;pointer-events:none;filter:drop-shadow(0 1px 1px #16336bcc)}
+.stack-icon .tri{fill:#8fb8ff}
+.stack-icon .ext{fill:#b9a4f2}
+.stack-btn .ic-stack{display:none}
+.stack-btn.on .ic-side{display:none}
+.stack-btn.on .ic-stack{display:inline}
+/* While an item is being dragged, the key under the finger keeps its resting position: no 2-3px pressed nudge for the whole drag (a plain tap still presses in). Rest tops: 0, 13/11/9 -42px, stacked maj7/7/6 -141px, stacked 13/11/9 -183px. */
+.swipe-pad.dragging .swipe-btn:active{top:0}
+.swipe-pad.dragging .swipe-btn.sevx:active{top:-42px}
+.swipe-pad.stacked.dragging .swipe-btn.sevmaj:active,.swipe-pad.stacked.dragging .swipe-btn.sev7:active,.swipe-pad.stacked.dragging .swipe-btn.sev6:active{top:-141px}
+.swipe-pad.stacked.dragging .swipe-btn.sevx:active{top:-183px}
+#circleStack.dragging button:active{transform:none!important}
+</style></head>
+<body><main>
+<div class="key-wheel-wrap" aria-label="Circle of fifths key selector"><div class="wheel-disc"><svg id="keyWheel" viewBox="0 0 100 100" role="img" aria-label="Choose a key"></svg></div><div id="modeIndicator" class="mode-indicator" aria-hidden="true"></div></div>
+<div class="bars-area" id="barsArea"><div class="bar-wrap" id="bottomWrap"><div class="chord-labels" id="bottomLabels" aria-label="Bottom chord labels"></div><div class="bar-row" id="barRow"><div class="motion-indicator" id="motionIndicator" aria-label="Triad formula">
+  <div class="motion-cell motion-arrow-cell" id="motionRoot" style="grid-column:2;grid-row:1"></div>
+  <div class="motion-cell motion-middle motion-arrow-cell" id="motionThird" style="grid-column:2;grid-row:2"></div>
+  <div class="motion-cell motion-arrow-cell" id="motionFifth" style="grid-column:2;grid-row:3"></div>
+  <div class="motion-cell formula-cell" id="motionRootLabel" style="grid-column:1;grid-row:1">R</div>
+  <div class="motion-cell formula-cell" id="motionThirdLabel" style="grid-column:1;grid-row:2">3</div>
+  <div class="motion-cell formula-cell" id="motionFifthLabel" style="grid-column:1;grid-row:3">5</div>
+  <div class="motion-cell motion-arrow-cell extra e3" id="motionSeventh" style="grid-column:2;grid-row:4"></div>
+  <div class="motion-cell formula-cell extra e3" id="motionSeventhLabel" style="grid-column:1;grid-row:4">7</div>
+  <div class="motion-cell motion-arrow-cell extra e4" id="motionNinth" style="grid-column:2;grid-row:5"></div>
+  <div class="motion-cell formula-cell extra e4" id="motionNinthLabel" style="grid-column:1;grid-row:5">9</div>
+  <div class="motion-cell motion-arrow-cell extra e5" id="motionEleventh" style="grid-column:2;grid-row:6"></div>
+  <div class="motion-cell formula-cell extra e5" id="motionEleventhLabel" style="grid-column:1;grid-row:6">11</div>
+  <div class="motion-cell motion-arrow-cell extra e6" id="motionThirteenth" style="grid-column:2;grid-row:7"></div>
+  <div class="motion-cell formula-cell extra e6" id="motionThirteenthLabel" style="grid-column:1;grid-row:7">13</div>
+</div><div class="triad-bar" id="bottomBar" aria-label="Bottom triad row"></div></div></div></div>
+<div class="note-bar" id="noteBar" aria-label="Triad notes"></div>
+<div class="swipe-pad" aria-label="Chord quality and spelling controls">
+<div class="pad-frame pad-frame-aug" aria-hidden="true"></div>
+<div class="pad-frame pad-frame-s4" aria-hidden="true"></div>
+<div class="pad-frame pad-frame-b" aria-hidden="true"></div>
+<div class="pad-frame pad-frame-sharp" aria-hidden="true"></div>
+<div class="pad-frame pad-frame-mdim" aria-hidden="true"></div>
+<div class="pad-frame pad-frame-s2" aria-hidden="true"></div>
+<div class="pad-frame pad-frame-6" aria-hidden="true"></div>
+<div class="pad-frame pad-frame-7" aria-hidden="true"></div>
+<div class="pad-frame pad-frame-ext" aria-hidden="true"></div>
+<button class="swipe-btn left" id="btnLeft" aria-label="Flat"><span class="btn-label">b</span></button>
+<button class="swipe-btn up" id="btnUp" aria-label="Major"><span class="btn-label">M</span></button>
+<button class="swipe-btn right" id="btnRight" aria-label="Sharp"><span class="btn-label">#</span></button>
+<button class="swipe-btn sus2" id="btnSus2" aria-label="Suspended second"><span class="btn-label">s2</span></button>
+<button class="swipe-btn down" id="btnDown" aria-label="Minor"><span class="btn-label">m</span></button>
+<button class="swipe-btn sus4" id="btnSus4" aria-label="Suspended fourth"><span class="btn-label">s4</span></button>
+<button class="swipe-btn aug" id="btnAug" aria-label="Augmented"><span class="btn-label">+</span></button>
+<button class="swipe-btn dim" id="btnDim" aria-label="Diminished"><span class="btn-label">&deg;</span></button>
+<button class="swipe-btn sevmaj" id="btnMaj7" aria-label="Major seventh"><span class="btn-label">maj7</span></button>
+<button class="swipe-btn sev7" id="btn7" aria-label="Seventh (flat seventh)"><span class="btn-label">7</span></button>
+<button class="swipe-btn sev6" id="btn6" aria-label="Sixth"><span class="btn-label">6</span></button>
+<button class="swipe-btn sevx x9" id="btn9" aria-label="Ninth"><span class="btn-label">9</span></button>
+<button class="swipe-btn sevx x11" id="btn11" aria-label="Eleventh"><span class="btn-label">11</span></button>
+<button class="swipe-btn sevx x13" id="btn13" aria-label="Thirteenth"><span class="btn-label">13</span></button>
+</div>
+<div class="quality-box" id="qualityBox" aria-label="Current chord quality"><div class="quality-main"><span class="quality-text" id="qualityText"></span></div><div class="quality-degrees" id="qualityDegrees"></div><div class="quality-arrows" id="qualityArrows"></div></div>
+<div class="circle-stack" id="circleStack" aria-label="Chord-bar view, spelling, reset, triad set and circle of fifths buttons">
+<button class="set-btn wheel-btn bars-btn m-top" id="btnBars" aria-label="Showing only the top chord bar; tap to show only the note bar"><svg class="wheel-icon" viewBox="0 0 24 24" aria-hidden="true"><rect class="bt" x="2" y="3" width="20" height="6.5" rx="2"/><rect class="bn" x="2" y="12.5" width="8.5" height="8.5" rx="2"/></svg></button>
+<button class="practical-btn" id="btnPractical" aria-label="Enharmonic respelling"><svg class="approx-icon" viewBox="0 0 26 22" aria-hidden="true"><path d="M3 6.5c3-4 6-4 10 0s7 4 10 0M3 15.5c3-4 6-4 10 0s7 4 10 0"/></svg></button>
+<button class="reset-btn" id="btnReset" aria-label="Reset">↻</button>
+<button class="set-btn" id="btnSet" aria-label="Triad set: circle of fourths"><svg class="wheel-icon set-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11"/><circle cx="12" cy="12" r="6"/><g id="btnSetIcon"></g></svg></button>
+<button class="set-btn full-btn" id="btnFull" aria-label="Showing the 5-note voicing; tap for the full 7-note chord"><svg class="full-icon" viewBox="0 0 24 24" aria-hidden="true"><g id="btnFullIcon"></g></svg></button>
+<button class="set-btn wheel-btn" id="btnWheel" aria-label="Hide circle of fifths" aria-pressed="true"><svg class="wheel-icon wheel-face" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10.5"/><circle cx="12" cy="12" r="5.2"/><path d="M17.02 13.35L21.66 14.59M15.68 15.68L19.07 19.07M13.35 17.02L14.59 21.66M10.65 17.02L9.41 21.66M8.32 15.68L4.93 19.07M6.98 13.35L2.34 14.59M6.98 10.65L2.34 9.41M8.32 8.32L4.93 4.93M10.65 6.98L9.41 2.34M13.35 6.98L14.59 2.34M15.68 8.32L19.07 4.93M17.02 10.65L21.66 9.41"/></svg></button>
+<button class="set-btn wheel-btn stack-btn" id="btnStack" aria-label="Extra chord buttons beside the triad buttons; tap to stack them on top" aria-pressed="false"><svg class="stack-icon" viewBox="0 0 24 24" aria-hidden="true"><g class="ic-side"><rect class="tri" x="2" y="6" width="10" height="12" rx="2"/><rect class="ext" x="13.5" y="6" width="3.8" height="12" rx="1.2"/><rect class="ext" x="18.2" y="6" width="3.8" height="12" rx="1.2"/></g><g class="ic-stack"><rect class="ext" x="3" y="2" width="8.5" height="7" rx="1.6"/><rect class="ext" x="12.5" y="2" width="8.5" height="7" rx="1.6"/><rect class="tri" x="3" y="11.5" width="18" height="10" rx="2"/></g></svg></button>
+</div></main>
+<script>
+// Nothing may be dragged (or pinch-resized) closer to the screen edge than the triad bar sits: 8px on every side.
+const EDGE=8;
+let showAltTriads=false; // tap the triad bar to flip between the two chord sets
+const fifths=['C','G','D','A','E','B','F♯','D♭','A♭','E♭','B♭','F'];let selectedKey='C',selectedMode='major',isMinor=false; // isMinor is an independent modifier that combines with aug / sus2 / sus4
+const groupsTop=[['F','A','C'],['C','E','G'],['G','B','D'],['D','F','A'],['A','C','E'],['E','G','B'],['B','D','F']];const groupsBottom=[['G','B','D'],['C','E','G'],['F','A','C'],['B','D','F'],['E','G','B'],['A','C','E'],['D','F','A']];
+
+function accidentalValue(acc){
+  if(!acc) return 0;
+  return [...acc].reduce((sum,ch)=>sum+(ch==='♯'?1:ch==='♭'?-1:ch==='𝄪'?2:ch==='𝄫'?-2:0),0);
+}
+function accidentalText(value){
+  // Standard notation: pairs of sharps/flats are written as double signs, with a single sign for any odd one out
+  // (3 sharps = 𝄪♯, 3 flats = 𝄫♭, 4 sharps = 𝄪𝄪), never a row of separate ♯ or ♭ signs.
+  if(!value)return '';
+  const n=Math.abs(value),dbl=value>0?'𝄪':'𝄫',one=value>0?'♯':'♭';
+  return dbl.repeat(Math.floor(n/2))+(n%2?one:'');
+}
+// Writes an accidental into an element; any double flat (𝄫) goes in its own span so it can be sized separately (see .dbl-flat).
+function fillAccidental(el,text){
+  el.textContent='';
+  [...text].forEach(ch=>{
+    if(ch==='𝄫'){const s=document.createElement('span');s.className='dbl-flat';s.textContent=ch;el.append(s)}
+    else el.append(ch);
+  });
+}
+const naturalPitch={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+let rootAlter=0; // 0 natural, +1 sharp, -1 flat
+let practicalSpelling=false;
+let fullNotes=false; // false = 5-note voicings for 11 / 13; true = the full stacked chord (R 3 5 7 9 11 [13])
+let ext=null; // null | 9 | 11 | 13 - extensions on top of the seventh, as 5-note guitar voicings
+let seventh=null; // null | 'b7' (7) | 'maj7' | '6' - the added 4th tone; the three are mutually exclusive - stacks with M / m / aug / dim / sus2 / sus4
+function normalizeAccidental(value){
+  // Return the smallest signed semitone alteration (-6 to +6).
+  // Do not wrap values such as +3 back into an invalid +3/-9 oscillation.
+  let v=((value%12)+12)%12;
+  if(v>6)v-=12;
+  return v;
+}
+function triadIntervals(){
+  if(selectedMode==='diminished') return isMinor?[0,3,6]:[0,4,6]; // minor 3rd = diminished (C\u00B0); major 3rd = C(\u266D5)
+  if(selectedMode==='sus2') return [0,2,7];
+  if(selectedMode==='sus4') return [0,5,7];
+  if(selectedMode==='augmented') return isMinor?[0,3,8]:[0,4,8];
+  return isMinor?[0,3,7]:[0,4,7];
+}
+function seventhSemis(){
+  if(!seventh)return null;
+  if(seventh==='6')return 9; // major sixth
+  if(selectedMode==='diminished'&&isMinor)return seventh==='b7'?10:9; // dim + 7 = half-diminished (m7b5); dim + maj7 = fully diminished (bb7). With a major 3rd (\u266D5) the 7ths are the normal 10 / 11.
+  return seventh==='b7'?10:11;
+}
+function extOn(){return !!ext&&!!seventh&&seventh!=='6'}
+// The chord's notes, one {semi, step, deg} per bar row/column. 9 / 11 / 13 use the usual 5-note guitar voicings:
+//   9  = R 3 5 7 9      11 = R 5 7 9 11 (major / sus4: the 3rd is dropped) or R 3 5 7 11 (minor, dim, aug, sus2: the 9th is dropped)      13 = R 3 7 9 13 (5th and 11th dropped)
+// A note that would repeat an earlier pitch (sus2 + 9, sus4 + 11) is left out.
+function chordTones(){
+  const ti=triadIntervals(),ls=triadLetterSteps(),dg=baseDegrees();
+  const triad=ti.map((semi,i)=>({semi,step:ls[i],deg:dg[i]}));
+  if(!seventh)return triad;
+  const sev={semi:seventhSemis(),step:seventh==='6'?5:6,deg:seventh==='6'?'6':selectedMode==='diminished'&&isMinor&&seventh==='maj7'?'\uD834\uDD2B7':seventh==='b7'?'\u266D7':'7'};
+  if(!extOn())return [...triad,sev];
+  const n9={semi:2,step:8,deg:'9'},n11={semi:5,step:10,deg:'11'},n13={semi:9,step:12,deg:'13'};
+  let out;
+  const full=fullNotes&&(ext===11||ext===13);
+  if(ext===9)out=[...triad,sev,n9];
+  else if(ext===11)out=full?[...triad,sev,n9,n11]:(selectedMode==='major'&&!isMinor)||selectedMode==='sus4'?[triad[0],triad[2],sev,n9,n11]:[...triad,sev,n11];
+  else out=full?[...triad,sev,n9,n11,n13]:[triad[0],triad[1],sev,n9,n13];
+  return out.filter((t,i)=>out.findIndex(u=>u.semi%12===t.semi%12)===i);
+}
+function chordIntervals(){return chordTones().map(t=>t.semi)}
+function letterSteps(){return chordTones().map(t=>t.step)}
+function triadLetterSteps(){
+  if(selectedMode==='sus2') return [0,1,4]; // 3rd is replaced by the 2nd
+  if(selectedMode==='sus4') return [0,3,4]; // 3rd is replaced by the 4th
+  // Letter distance of root/middle/fifth: sus2 uses the 2nd, sus4 the 4th.
+  return [0,2,4];
+}
+function practicalTriad(notes){
+  // Preserve the actual root pitch and chord quality, but choose the
+  // clearest enharmonic spelling for the root, major/minor third, and fifth.
+  const rootPitch=(naturalPitch[notes[0]]+rootAlter+120)%12;
+  const intervals=chordIntervals();
+  const letters=['C','D','E','F','G','A','B'];
+  const chordLetterSteps=letterSteps();
+  const candidates=[];
+
+  for(const letter of letters){
+    const li=letters.indexOf(letter);
+    const rootAcc=normalizeAccidental(rootPitch-naturalPitch[letter]);
+
+    const tones=chordLetterSteps.map((step,i)=>{
+      const toneLetter=letters[(li+step)%7];
+      const targetPitch=(rootPitch+intervals[i])%12;
+      const acc=normalizeAccidental(targetPitch-naturalPitch[toneLetter]);
+      return {letter:toneLetter,acc};
+    });
+
+    const allAccidentals=[rootAcc,...tones.map(t=>t.acc)];
+    const cost=allAccidentals.reduce((sum,acc)=>sum+Math.abs(acc),0);
+
+    // If two spellings are equally simple, retain the original root letter.
+    // This keeps F# as F# rather than arbitrarily changing it to Gb.
+    const originalLetterPenalty=letter===notes[0]?0:1;
+
+    // As a final tie-break, follow the user's selected sharp/flat direction.
+    const directionPenalty=
+      rootAlter>0&&rootAcc<0 ? 1 :
+      rootAlter<0&&rootAcc>0 ? 1 : 0;
+
+    candidates.push({
+      letter,
+      rootAcc,
+      tones,
+      cost,
+      originalLetterPenalty,
+      directionPenalty
+    });
+  }
+
+  candidates.sort((a,b)=>
+    a.cost-b.cost ||
+    a.originalLetterPenalty-b.originalLetterPenalty ||
+    a.directionPenalty-b.directionPenalty ||
+    a.letter.localeCompare(b.letter)
+  );
+
+  const best=candidates[0];
+  // Practical exception: an augmented 5th that would need a double accidental (B+ = B D\u266F F\ud835\udd2a)
+  // is written as the plain note it sounds like (G), which is how players and charts usually write it.
+  if(selectedMode==='augmented'){
+    const t=best.tones[2];
+    if(Math.abs(t.acc)>=2){
+      // Prefer respelling the WHOLE chord (root, middle and fifth) to the best spelling with no double accidentals.
+      const clean=candidates.find(c=>Math.abs(c.rootAcc)<2&&c.tones.every(x=>Math.abs(x.acc)<2));
+      if(clean) return clean;
+      // No such spelling exists: fall back to writing only the fifth as the plain note it sounds like.
+      const target=(rootPitch+intervals[2])%12;
+      const fix=letters.map(L=>({letter:L,acc:normalizeAccidental(target-naturalPitch[L])})).sort((x,y)=>Math.abs(x.acc)-Math.abs(y.acc))[0];
+      return {...best,tones:[best.tones[0],best.tones[1],fix,...best.tones.slice(3)]};
+    }
+  }
+  return best;
+}
+function chordSpelling(notes){
+  // The # / b controls transpose the ENTIRE triad by one semitone.
+  // They are independent of chord quality and never alter only the third.
+  const baseRootPitch=naturalPitch[notes[0]];
+  const transposedRootPitch=(baseRootPitch+rootAlter+120)%12;
+  const intervals=chordIntervals();
+  const letters=['C','D','E','F','G','A','B'];
+  const steps=letterSteps();
+
+  const rootLetter=notes[0];
+  const rootAcc=normalizeAccidental(transposedRootPitch-naturalPitch[rootLetter]);
+  const tones=steps.map((step,index)=>{
+    const toneLetter=letters[(letters.indexOf(rootLetter)+step)%7];
+    const originalTonePitch=(baseRootPitch+intervals[index])%12;
+    const transposedTonePitch=(originalTonePitch+rootAlter+120)%12;
+    return {letter:toneLetter,acc:normalizeAccidental(transposedTonePitch-naturalPitch[toneLetter])};
+  });
+  const spelled={letter:rootLetter,rootAcc,tones};
+  // Practical spelling (≈) only respells a triad that contains a double accidental (𝔫 / 𝔪); all other triads stay as they are.
+  if(practicalSpelling&&[rootAcc,...tones.map(t=>t.acc)].some(a=>Math.abs(a)>=2)) return practicalTriad(notes);
+  return spelled;
+}
+function chordAccidentals(notes){ return chordSpelling(notes).tones.map(t=>accidentalText(t.acc)); }
+function chordSuffix(){
+  const flat5=selectedMode==='diminished'&&!isMinor; // dim with a MAJOR 3rd: C(b5), C7b5 ...
+  const base=({diminished:flat5?'(\u266D5)':'\u00B0',augmented:'+',sus2:'sus2',sus4:'sus4'})[selectedMode]||'';
+  const minor=isMinor&&selectedMode!=='diminished',plain=minor?'m'+base:base,flat=seventh==='b7',mm=minor?'m':''; // mm: the m in front of + (Cm+ = Cm(#5))
+  if(!seventh) return plain;
+  if(seventh==='6'){if(selectedMode==='diminished')return flat5?'6\u266D5':'\u00B06';if(selectedMode==='sus2'||selectedMode==='sus4')return '6'+base;if(selectedMode==='augmented')return mm+'+6';return minor?'m6':'6'} // C6, Cm6, C6sus4 ...
+  const num=extOn()?String(ext):'7';
+  if(selectedMode==='diminished') return flat5?(flat?num:'maj'+num)+'\u266D5':(flat?'\u00F8':'\u00B0')+num; // ø7 = m7b5, °7 = fully diminished; C7b5 / Cmaj7b5 with a major 3rd
+  if(selectedMode==='sus2'||selectedMode==='sus4') return (flat?num:'M'+num)+base;
+  if(selectedMode==='augmented') return mm+'+'+(flat?num:'M'+num);
+  if(minor) return flat?'m'+num:'mM'+num;
+  return flat?num:'maj'+num;
+}
+const wheel=document.getElementById('keyWheel'),indicator=document.getElementById('modeIndicator');function polar(r,a){return{x:50+r*Math.sin(a),y:50-r*Math.cos(a)}}function path(r1,r2,a1,a2){const p1=polar(r2,a1),p2=polar(r2,a2),p3=polar(r1,a2),p4=polar(r1,a1);return`M ${p1.x} ${p1.y} A ${r2} ${r2} 0 0 1 ${p2.x} ${p2.y} L ${p3.x} ${p3.y} A ${r1} ${r1} 0 0 0 ${p4.x} ${p4.y} Z`}
+// Circle of fifths, two rings (outer = major keys, inner = relative minors). One colour per position.
+const wheelColors=[ // [label, outer fill, inner fill] in fifths order starting at C
+  ['#c85144','#553232','#512e2d'],['#45998a','#284646','#254244'],['#bd7233','#4b3623','#4d3623'],
+  ['#4b74c5','#25334f','#293755'],['#b6ab37','#45421e','#4d491d'],['#864eb5','#312241','#3b274c'],
+  ['#4ea76b','#1f3b2c','#264233'],['#aa522d','#3b241c','#40281e'],['#448fa1','#1e3940','#243c46'],
+  ['#ad8931','#463c1f','#483e22'],['#7f6ac8','#393454','#393355'],['#74a63c','#3a4b2b','#364726']
+];
+const relativeMinors=['A','E','B','F\u266F','C\u266F','G\u266F','D\u266F','B\u266D','F','C','G','D'];
+// Note colours: every note takes the colour of its pitch on the circle of fifths (outer ring). Double-accidental notes stay red.
+const notePitchColors=(()=>{const m={};wheelColors.forEach((c,i)=>{m[(i*7)%12]=c[0]});return m})();
+function noteColor(letter,acc){return notePitchColors[((naturalPitch[letter]+acc)%12+12)%12]}
+function shade(hex,f){const n=parseInt(hex.slice(1),16);return '#'+[16,8,0].map(sh=>Math.round(((n>>sh)&255)*f).toString(16).padStart(2,'0')).join('')}
+// The wheel is drawn in the colours the note letters actually look like on their dark bars: the pitch colour blended 22% toward the bar background, so it is a little less bright.
+function wheelTone(hex){const n=parseInt(hex.slice(1),16),bg=[0x1a,0x21,0x32],k=.22;return '#'+[16,8,0].map((sh,i)=>Math.round(((n>>sh)&255)*(1-k)+bg[i]*k).toString(16).padStart(2,'0')).join('')}
+function drawWheel(){
+  const sig=selectedKey+'|'+showAltTriads;if(drawWheel.sig===sig&&wheel.firstChild)return; // nothing the wheel shows has changed: skip rebuilding ~60 SVG nodes
+  drawWheel.sig=sig;
+  const ns='http://www.w3.org/2000/svg';
+  const create=(tag,attrs={})=>{
+    const el=document.createElementNS(ns,tag);
+    Object.entries(attrs).forEach(([key,value])=>el.setAttribute(key,value));
+    return el;
+  };
+  const R_OUT=46,R_MID=26,R_IN=14.2,R_DISC=14,R_RING=12.3,R_LABEL_OUT=36,R_LABEL_IN=19.7;
+  wheel.innerHTML='';
+  const defs=create('defs');
+  const grad=create('radialGradient',{id:'wheelCenterGradient',cx:'.42',cy:'.28',r:'.8'});
+  grad.appendChild(create('stop',{offset:'0%','stop-color':'#2b2f37'}));
+  grad.appendChild(create('stop',{offset:'60%','stop-color':'#15181d'}));
+  grad.appendChild(create('stop',{offset:'100%','stop-color':'#0c0d10'}));
+  defs.appendChild(grad);
+  wheel.appendChild(defs);
+  wheel.appendChild(create('circle',{cx:'50',cy:'50',r:'48',class:'wheel-base'}));
+  const step=Math.PI*2/12;
+  const choose=key=>()=>{selectedKey=key;render()};
+  // Sectors: outer ring first, then inner ring.
+  fifths.forEach((key,i)=>{
+    const p=create('path',{d:path(R_MID,R_OUT,i*step-step/2,i*step+step/2),fill:wheelTone(wheelColors[i][0]),class:'wheel-sector'});
+    p.addEventListener('click',choose(key));
+    wheel.appendChild(p);
+  });
+  fifths.forEach((key,i)=>{
+    const p=create('path',{d:path(R_IN,R_MID,i*step-step/2,i*step+step/2),fill:shade(wheelTone(wheelColors[i][0]),.78),class:'wheel-sector'});
+    p.addEventListener('click',choose(key));
+    wheel.appendChild(p);
+  });
+  // Labels.
+  fifths.forEach((key,i)=>{
+    const o=polar(R_LABEL_OUT,i*step),n=polar(R_LABEL_IN,i*step);
+    const lo=create('text',{x:o.x,y:o.y,class:'wheel-label outer',fill:'#fff'});lo.textContent=key;wheel.appendChild(lo);
+    const li=create('text',{x:n.x,y:n.y,class:'wheel-label inner',fill:'#fff'});li.textContent=relativeMinors[i];wheel.appendChild(li);
+  });
+  // Centre disc.
+  wheel.appendChild(create('circle',{cx:'50',cy:'50',r:R_DISC,class:'wheel-center'}));
+  wheel.appendChild(create('circle',{cx:'50',cy:'50',r:R_RING,class:'wheel-center-ring'}));
+  const centerLabel=create('text',{x:'50',y:'49.4',class:'wheel-center-label','font-size':selectedKey.length>1?'8.4':'9.2'});
+  centerLabel.textContent=selectedKey;
+  wheel.appendChild(centerLabel);
+  // Outline for the triad set on the bar. Only two fixed outlines exist, both on the outer (major) ring and never
+  // moved by #/b or M/m:
+  //   circle of fourths (4, bar starts at G): G C F B♭ E♭ A♭ D♭ -> outline runs Db..G, arrow at Db
+  //   circle of fifths  (5, bar starts at F): F C G D A E B -> outline runs F..B, arrow at B
+  // Circle of fifths (5) and circle of fourths (4) are the same kind of arc travelled in opposite directions,
+  // so the outline changes colour and its arrow flips.
+  const onMinorRing=false;
+  const SET_SIZE=7;
+  const startPos=showAltTriads?11:7; // wheel position of the first key of the arc (F = 11, Db = 7)
+  if(startPos>=0){
+    const clockwise=showAltTriads; // 5 = clockwise, 4 = counterclockwise
+    const col=clockwise?'#8fd6ff':'#ffd27a';
+    const ri=onMinorRing?R_IN:R_MID,ro=onMinorRing?R_MID:R_OUT,inset=.5,angInset=.016;
+    const a1=startPos*step-step/2+angInset,a2=(startPos+SET_SIZE-1)*step+step/2-angInset;
+    const rIn=ri+inset,rOut=ro-inset,large=(a2-a1)>Math.PI?1:0;
+    const o1=polar(rOut,a1),o2=polar(rOut,a2),i2=polar(rIn,a2),i1=polar(rIn,a1);
+    const d=`M ${o1.x} ${o1.y} A ${rOut} ${rOut} 0 ${large} 1 ${o2.x} ${o2.y} L ${i2.x} ${i2.y} A ${rIn} ${rIn} 0 ${large} 0 ${i1.x} ${i1.y} Z`;
+    const g=create('g',{class:'wheel-set-outline','data-set':clockwise?'5':'4','pointer-events':'none'});
+    g.appendChild(create('path',{d,fill:'none',stroke:'#000','stroke-opacity':'.55','stroke-width':'2.7','stroke-linejoin':'round'}));
+    g.appendChild(create('path',{d,fill:'none',stroke:col,'stroke-width':'1.15','stroke-linejoin':'round'}));
+    // Direction arrow: an arrowhead whose base sits flush on the outline's starting edge (centred across the ring)
+    // and whose tip points into the outline along the arc, in the direction the set is read (5 = clockwise/right, 4 = counterclockwise/left).
+    const ea=clockwise?a1:a2;                                  // angle of the edge the set starts from (G for 4, F for 5)
+    const dir=clockwise?1:-1;                                  // travel direction along the arc
+    const tx=dir*Math.cos(ea),ty=dir*Math.sin(ea);             // unit tangent (travel direction) at that edge
+    const nx=Math.sin(ea),ny=-Math.cos(ea);                    // unit radial (along the end edge)
+    const mid=polar((ri+ro)/2,ea),half=4.2,len=3.9;
+    const bl=[mid.x+nx*half,mid.y+ny*half],br=[mid.x-nx*half,mid.y-ny*half],tip=[mid.x+tx*len,mid.y+ty*len];
+    const pts=[bl,tip,br].map(q=>q.join(',')).join(' ');
+    g.appendChild(create('polygon',{points:pts,fill:col,stroke:'#000','stroke-opacity':'.6','stroke-width':'.8','stroke-linejoin':'round','paint-order':'stroke'}));
+    wheel.appendChild(g);
+  }
+}
+function makeBar(el,groups){el.style.setProperty('--groups',groups.length);el.innerHTML='';groups.forEach(notes=>{const group=document.createElement('div');group.className='triad-group';const ns=document.createElement('div');ns.className='note-stack';const as=document.createElement('div');as.className='acc-stack';notes.forEach(letter=>{const n=document.createElement('div');n.className='triad-cell';n.textContent=letter;ns.appendChild(n);const a=document.createElement('div');a.className='triad-cell accidental';as.appendChild(a)});for(let k=3;k<7;k++){const n4=document.createElement('div');n4.className='triad-cell extra e'+k;ns.appendChild(n4);const a4=document.createElement('div');a4.className='triad-cell accidental extra e'+k;as.appendChild(a4)}group.append(ns,as);el.appendChild(group)})}
+
+function renderChordLabels(el,groups){
+  el.innerHTML='';
+  el.classList.toggle('aug-maj7',selectedMode==='augmented'&&seventh==='maj7'); // + and maj7 both active
+  el.classList.toggle('ext-on',extOn());
+  el.classList.toggle('full-size',rootAlter!==0&&(seventh==='maj7'||extOn()||((selectedMode==='sus2'||selectedMode==='sus4')&&!!seventh))); // # or b with maj7 / 9 / 11 / 13, or with s2 / s4 + 7 / 6: default label size (sus and sus2 labels match)
+  el.classList.toggle('sharp-aug-maj7',rootAlter>0&&selectedMode==='augmented'&&seventh==='maj7'); // # + and maj7 all active
+  el.classList.toggle('sharp-aug-ext-alt',rootAlter>0&&selectedMode==='augmented'&&seventh==='maj7'&&extOn()&&(ext===11||ext===13)); // # , + , maj7 and 11 (or 13) all active: the text after the # is angled
+  el.classList.toggle('aug-maj13',rootAlter===0&&selectedMode==='augmented'&&seventh==='maj7'&&extOn()&&ext===13); // + , maj7 and 13 active, natural roots
+  el.classList.toggle('sharp-aug-b7-13',rootAlter>0&&selectedMode==='augmented'&&seventh==='b7'&&extOn()&&ext===13); // # + 7 and 13 all active: the text after the # is 2px smaller
+  el.classList.toggle('flat-aug-maj7',rootAlter<0&&selectedMode==='augmented'&&seventh==='maj7'&&!extOn()); // b + and maj7 active, no extension: text after the b 2px smaller, the b 1px larger
+  el.classList.toggle('sharp-maj7',rootAlter>0&&seventh==='maj7'&&selectedMode==='major'&&!isMinor); // # + M + maj7
+  const sharpMin7Ext=rootAlter!==0&&isMinor&&selectedMode==='major'&&seventh==='b7'&&extOn()&&(ext===11||ext===13); // # or b, m , 7 and 11 (or 13) all active
+  const sharpMaj7Plain=rootAlter!==0&&selectedMode==='major'&&seventh==='maj7'&&!extOn(); // # + maj7 with M or m (#maj7 / #mM7), no extension: the text after the # is angled
+  const sharpFlatMaj7Ext=rootAlter!==0&&seventh==='maj7'&&extOn()&&!(selectedMode==='augmented'&&rootAlter>0&&(ext===11||ext===13)); // # or b + maj7 + 9 / 11 / 13 (6 states, any quality): the accidental makes the label too long, so the text after it is angled. +#11/13 is already angled by sharp-aug-ext-alt, so it is left out here to keep its sharp size.
+  const angledLabels=(selectedMode==='sus2'&&(rootAlter!==0||isMinor||!!seventh||!!ext))||sharpMin7Ext||sharpMaj7Plain||(selectedMode==='sus4'&&(!!seventh||!!ext))||sharpFlatMaj7Ext; // every sus4 label is angled whenever a purple button (7/maj7/6/9/11/13) is active; every sus2 label is angled, except s2 active by itself (no #/b, m, 7/maj7/6 or extension), which stays level; #m7 / bm7 + 11 / 13 are angled too
+  el.classList.toggle('sus-maj7-alt',angledLabels);
+  el.classList.toggle('sus-maj7-sharp',angledLabels&&rootAlter>0); // the same states, with a sharp (not a flat)
+  el.classList.toggle('sus2-7-alt',rootAlter!==0&&seventh==='b7'&&selectedMode==='sus2'); // # or b, 7 and s2 all active
+  groups.forEach(notes=>{
+    const label=document.createElement('div');
+    label.className='chord-label';
+
+    const rootAcc=document.createElement('span');
+    rootAcc.className='label-root-acc';
+
+    const root=document.createElement('span');
+    root.className='label-root';
+
+    const spelling=chordSpelling(notes);
+    root.textContent=spelling.letter;
+    // Whole label (root, accidental, quality text) takes the colour of its chord's root note, as in the note boxes below.
+    if(Math.abs(spelling.rootAcc)>=2)rootAcc.classList.add('double-accidental');else rootAcc.style.color=noteColor(spelling.letter,spelling.rootAcc);
+
+    const acc=document.createElement('span');
+    acc.className='label-acc';
+    fillAccidental(acc,accidentalText(spelling.rootAcc));
+
+    const suffix=document.createElement('span');
+    suffix.className='label-suffix';
+    // Shrink sus2/sus4 only when the displayed chord root has a sharp or flat.
+    if((selectedMode==='sus2'||selectedMode==='sus4') && spelling.rootAcc!==0){
+      suffix.classList.add('compact-altered-sus');
+    }
+    const sfx=chordSuffix();
+    const susMatch=/^(m?)sus([24])$/.exec(sfx);
+    if(susMatch){
+      suffix.classList.add('has-sus');
+      {
+        suffix.append(susMatch[1]);
+        const sus=document.createElement('span');
+        sus.className='sus-word';
+        sus.textContent='sus';
+        const num=document.createElement('span');
+        num.className='sus-num';
+        num.textContent=susMatch[2];
+        if(susMatch[2]==='4')suffix.append(sus);else suffix.append(sus,num); // sus4 shows only "sus"
+      }
+    }else{let sm_;if((sm_=/^maj(\d+)$/.exec(sfx))){suffix.append('maj');const sv=document.createElement('span');sv.className='sev';sv.textContent=sm_[1];suffix.append(sv)}else if((sm_=/^\+M(\d+)$/.exec(sfx))){suffix.append('+');const m7=document.createElement('span');m7.className='m7';m7.textContent='M'+sm_[1];suffix.append(m7)}else if((sm_=/^mM(\d+)$/.exec(sfx))){const mm=document.createElement('span');mm.className='mm';mm.textContent='mM';suffix.append(mm,sm_[1])}else suffix.textContent=sfx.replace('sus4','sus');if(sfx.length>=4)suffix.classList.add('long-sfx');if(/^maj\d+$/.test(sfx)||/sus/.test(sfx))suffix.classList.add('maj-sfx')}
+    if(/sus/.test(sfx)&&!susMatch)suffix.classList.add('sus-combo'); // sus + an added note: the whole name is as small as the plain sus word
+
+    rootAcc.append(root,acc,suffix);
+    label.appendChild(rootAcc);
+    el.appendChild(label);
+  });
+}
+// Centre each chord root exactly over its chord column; accidental and suffix follow to its right.
+function alignLabels(){
+  // Each root stays centred directly above the note letter in the box beneath it, always (labels never slide or angle).
+  // If any label would be cut off, every label's maj / sus text shrinks 3px together so they all stay the same size.
+  // The smaller sharp sign keeps its old footprint: the text after it stays exactly where it was before the sharp was shrunk.
+  {const lab=document.getElementById('bottomLabels');
+   if(lab&&lab.classList.contains('sus-maj7-sharp')){
+     const accs=[...lab.querySelectorAll('.label-acc')];
+     lab.classList.remove('sus-maj7-sharp');const w0=accs.map(x=>x.getBoundingClientRect().width);
+     lab.classList.add('sus-maj7-sharp');
+     accs.forEach((x,i)=>{x.style.marginRight=Math.max(0,w0[i]-x.getBoundingClientRect().width)+'px'});
+   }}
+  const bar=document.getElementById('barRow'),barRight=bar?bar.getBoundingClientRect().right:innerWidth; // the whole top bar, degree box included
+  const els=[...document.querySelectorAll('.label-root-acc')];
+  const labBox=document.getElementById('bottomLabels');if(labBox)labBox.style.fontSize=''; // undo any earlier shrink-to-fit
+  els.forEach(el=>{el.classList.remove('small-sfx');el.style.marginLeft='0px'});
+  const rootW=els.map(el=>el.querySelector('.label-root').getBoundingClientRect().width); // all reads together: one layout pass
+  els.forEach((el,i)=>{el.style.marginLeft=(-rootW[i]/2)+'px'});
+  if(document.getElementById('bottomLabels').classList.contains('sus-maj7-alt')||document.getElementById('bottomLabels').classList.contains('sharp-aug-ext-alt'))return; // angled labels keep their normal size
+  // s2/s4 + 7 or 6: sharp and flat labels share one size. The cut-off test ignores the sharp sign being a touch wider than the flat sign.
+  const susSev=(selectedMode==='sus2'||selectedMode==='sus4')&&(seventh==='b7'||seventh==='6');
+  const accTrim=el=>{
+    if(!susSev)return 0;
+    const acc=el.querySelector('.label-acc');if(!acc)return 0;
+    const ws=[1,-1].map(v=>{const pr=acc.cloneNode(false);pr.textContent='';fillAccidental(pr,accidentalText(v));pr.style.cssText='position:absolute;visibility:hidden;margin:0';acc.parentNode.appendChild(pr);const w=pr.getBoundingClientRect().width;pr.remove();return w});
+    return Math.max(0,acc.getBoundingClientRect().width-Math.min(...ws));
+  };
+  const cut=(el,i)=>{
+    const r=el.getBoundingClientRect(),next=els[i+1],trim=accTrim(el);
+    if(next){const nr=next.querySelector('.label-root').getBoundingClientRect();if(r.right-trim>nr.left-8)return true}
+    return r.right-trim>barRight-2;
+  };
+  // If any label is cut off, every label's maj / sus text shrinks together so all the labels stay the same size.
+  // 6sus is sized exactly like 7sus: measure the cut-off test with the 7 glyph, then put the 6 back.
+  const swap6=seventh==='6'&&(selectedMode==='sus2'||selectedMode==='sus4');
+  const sufNodes=swap6?els.map(el=>el.querySelector('.label-suffix')&&el.querySelector('.label-suffix').firstChild).filter(n=>n&&n.nodeType===3&&n.nodeValue[0]==='6'):[];
+  sufNodes.forEach(n=>{n.nodeValue='7'+n.nodeValue.slice(1)});
+  // The 6 degree box is narrower than the b7 one, which nudges the columns; lay the bar out as 7 for the test too, then put 6 back.
+  const barG=showAltTriads?groupsTop:groupsBottom;
+  if(swap6){seventh='b7';try{renderNoteBar(barG)}catch(_){}}
+  const anyCut=els.some((el,i)=>cut(el,i));
+  if(swap6){seventh='6';try{renderNoteBar(barG)}catch(_){}}
+  sufNodes.forEach(n=>{n.nodeValue='6'+n.nodeValue.slice(1)});
+  if(anyCut&&!(labBox&&labBox.classList.contains('full-size')))els.forEach(el=>el.classList.add('small-sfx'));
+  // Labels are always level, so if they still run into each other or off the bar, every label shrinks together until they fit.
+  // + and maj (+M7, +M9, +M11, +M13 ...): the labels keep the exact +M7 size - they never shrink, however long the extension name is.
+  if(false&&anyCut&&labBox&&!labBox.classList.contains('aug-maj7')&&els.some((el,i)=>cut(el,i))){ // disabled: cut-off labels keep their normal size
+    for(const k of [.94,.88,.82,.76,.7,.64,.58]){
+      labBox.style.fontSize='calc(var(--font) * '+k+')';
+      els.forEach(el=>{el.style.marginLeft='0px';el.style.marginLeft=(-el.querySelector('.label-root').getBoundingClientRect().width/2)+'px'});
+      if(!els.some((el,i)=>cut(el,i)))break;
+    }
+  }
+}
+function applyChordAccidentals(el,groups){
+  [...el.querySelectorAll('.triad-group')].forEach((group,i)=>{
+    const spelling=chordSpelling(groups[i]);
+    const noteCells=group.querySelectorAll('.note-stack .triad-cell');
+    const accidentalCells=group.querySelectorAll('.acc-stack .triad-cell');
+    spelling.tones.forEach((tone,j)=>{
+      const accidental=accidentalText(tone.acc)||'';
+      // Only double (or triple...) accidentals are shown in red.
+      const isDouble=Math.abs(tone.acc)>=2;
+      noteCells[j].textContent=tone.letter;
+      fillAccidental(accidentalCells[j],accidental);
+      noteCells[j].classList.toggle('double-accidental',isDouble);
+      accidentalCells[j].classList.toggle('double-accidental',isDouble);
+      const col=isDouble?'':noteColor(tone.letter,tone.acc); // red (double accidentals) comes from the CSS class
+      noteCells[j].style.color=col;accidentalCells[j].style.color=col;
+    });
+    for(let j=spelling.tones.length;j<noteCells.length;j++){noteCells[j].textContent='';accidentalCells[j].textContent='';noteCells[j].style.color=accidentalCells[j].style.color='';noteCells[j].classList.remove('double-accidental');accidentalCells[j].classList.remove('double-accidental')}
+  });
+}
+// Chord-tone degrees for the current chord quality, counted from the root: R, 3 / b3 / 2 / 4, 5 / b5 / #5.
+function chordDegreeLabels(){return chordTones().map(t=>t.deg)}
+function baseDegrees(){
+  const d=['R',
+    selectedMode==='sus2'?'2':selectedMode==='sus4'?'4':(isMinor?'\u266D3':'3'),
+    selectedMode==='diminished'?'\u266D5':selectedMode==='augmented'?'\u266F5':'5'];
+  return d;
+}
+// Shrink each chord name (G#M7sus2 ...) just enough to sit inside its chord box. Boxes and bar never change size.
+function fitNoteRoots(el){
+  const roots=[...el.querySelectorAll('.note-root')];
+  roots.forEach(r=>{r.style.fontSize=''});
+  const sizes=roots.map(r=>{ // measure everything first (one layout pass), then write
+    const kids=[...r.children];if(!kids.length)return null;
+    const avail=r.clientWidth-8;if(avail<=0)return null;
+    const rects=kids.map(k=>k.getBoundingClientRect()),nat=Math.max(...rects.map(q=>q.right))-Math.min(...rects.map(q=>q.left));
+    if(nat>avail){const base=parseFloat(getComputedStyle(r).fontSize)||15;return (Math.floor(base*avail/nat*10)/10-.1)+'px'}
+    return null;
+  });
+  sizes.forEach((px,i)=>{if(px)roots[i].style.fontSize=px});
+}
+function fitQualityText(box,txt){
+  txt.style.fontSize='';
+  const avail=box.clientWidth-14,nat=txt.getBoundingClientRect().width;
+  if(avail>0&&nat>avail){const base=parseFloat(getComputedStyle(txt).fontSize)||15;txt.style.fontSize=(Math.floor(base*avail/nat*10)/10-.1)+'px'}
+}
+// Fill a degree label (R, 3, #5, b7 ...) so its sharp / flat sign is its own span and can be sized separately.
+function fillDegree(el,text){
+  el.textContent='';
+  String(text).split(/([\u266F\u266D\u{1D12A}\u{1D12B}])/u).forEach(part=>{
+    if(!part)return;
+    if(/^[\u266F\u266D\u{1D12A}\u{1D12B}]$/u.test(part)){const a=document.createElement('span');a.className='deg-acc';a.textContent=part;el.appendChild(a)}else el.append(part);
+  });
+}
+function renderNoteBar(groups,measuring){
+  // Vertical note bar: each chord is a block with its root on top and its three notes in one row below.
+  const el=document.getElementById('noteBar');
+  el.innerHTML='';
+  // Horizontal copy of the triad degree box (R 3 5 on top, movement arrows beneath), attached to the top of the bar.
+  const head=document.createElement('div');head.className='note-motion';head.setAttribute('aria-hidden','true');
+  const nCols=chordIntervals().length;head.style.setProperty('--n',nCols);
+  for(let i=0;i<nCols*2;i++){const c=document.createElement('div');c.className='motion-cell'+(i%nCols===nCols-1?' lc':'')+(i<nCols?' r1':' r2');head.appendChild(c)}
+  el.appendChild(head);
+  groups.forEach((notes,chordIndex)=>{
+    const sp=chordSpelling(notes);
+    const chord=document.createElement('div');chord.className='note-chord';
+    const root=document.createElement('div');root.className='note-root';
+    // Full chord name, same as the top labels: root + accidental + quality (m, °, +, sus2, sus4, msus2 ...).
+    const rl=document.createElement('span');rl.className='label-root';rl.textContent=sp.letter;
+    const ra=document.createElement('span');ra.className='label-acc';fillAccidental(ra,accidentalText(sp.rootAcc));
+    const rs=document.createElement('span');rs.className='label-suffix';
+    const sfx=chordSuffix(),sm=/^(m?)sus([24])$/.exec(sfx);
+    if(sm){
+      rs.append(sm[1]);
+      const sw=document.createElement('span');sw.className='sus-word';sw.textContent='sus';
+      const sn=document.createElement('span');sn.className='sus-num';sn.textContent=sm[2];
+      if(sm[2]==='4')rs.append(sw);else rs.append(sw,sn); // sus4 shows only "sus"
+    }else{rs.textContent=sfx.replace('sus4','sus');if(/sus/.test(sfx))rs.classList.add('sus-combo')} // sus + an added note: as small as the plain sus word
+    root.append(rl,ra,rs);
+    const list=document.createElement('div');list.className='note-list';list.style.setProperty('--n',sp.tones.length);
+    const degrees=chordDegreeLabels();
+    sp.tones.forEach((t,i)=>{
+      const col=document.createElement('div');col.className='note-col';
+      const n=document.createElement('span');n.className='note-n';
+      n.append(t.letter);
+      const accTxt=accidentalText(t.acc);
+      if(accTxt){const ac=document.createElement('span');ac.className='note-acc';fillAccidental(ac,accTxt);n.append(ac)} // accidental drawn 3px smaller than the note letter
+      if(Math.abs(t.acc)>=2)n.classList.add('double-accidental');else n.style.color=noteColor(t.letter,t.acc);
+      const d=document.createElement('span');d.className='note-deg';if(chordIndex<groups.length-1)d.classList.add('degree-rule');fillDegree(d,degrees[i]);
+      col.append(n,d);list.appendChild(col);
+    });
+    chord.append(root,list);el.appendChild(chord);
+  });
+  if(!measuring)fitNoteRoots(el);
+  syncNoteMotion();
+  if(!measuring&&el.style.left){const l=parseFloat(el.style.left)||0;el.style.left=Math.max(EDGE,Math.min(innerWidth-EDGE-el.offsetWidth,l))+'px'}
+}
+// Copy the degree labels and movement arrows from the triad degree box into the copy at the top of the note bar.
+function syncNoteMotion(){
+  try{fillQualityArrows()}catch(_){}
+  const head=document.querySelector('#noteBar .note-motion');if(!head)return;
+  const nc=head.children.length/2;
+  [['motionRootLabel','motionRoot'],['motionThirdLabel','motionThird'],['motionFifthLabel','motionFifth'],['motionSeventhLabel','motionSeventh'],['motionNinthLabel','motionNinth'],['motionEleventhLabel','motionEleventh'],['motionThirteenthLabel','motionThirteenth']].slice(0,nc).forEach(([l,a],i)=>{
+    const L=document.getElementById(l),A=document.getElementById(a);if(!L||!A)return;
+    const hl=head.children[i],ha=head.children[nc+i];
+    fillDegree(hl,L.textContent);hl.classList.toggle('double-motion',L.classList.contains('double-motion'));
+    ha.innerHTML=A.innerHTML;ha.classList.toggle('double-motion',A.classList.contains('double-motion'));
+  });
+}
+// Copy the movement arrows (and their blue "moved 2+ semitones" state) from the triad formula box into the quality box, one cell per note column.
+function fillQualityArrows(){
+  const ar=document.getElementById('qualityArrows');if(!ar)return;
+  const n=chordIntervals().length,ids=['motionRoot','motionThird','motionFifth','motionSeventh','motionNinth','motionEleventh','motionThirteenth'];
+  ar.style.gridTemplateColumns='repeat('+n+',minmax(0,1fr))';ar.textContent='';
+  for(let i=0;i<n;i++){
+    const A=document.getElementById(ids[i]),c=document.createElement('div');c.className='qa';
+    if(A){c.innerHTML=A.innerHTML;c.classList.toggle('double-motion',A.classList.contains('double-motion'))}
+    ar.appendChild(c);
+  }
+}
+function updateQualityBox(){
+  const box=document.getElementById('qualityBox'),bar=document.getElementById('noteBar'),txt=document.getElementById('qualityText');
+  if(!box||!bar||!txt)return;
+  txt.textContent='';
+  box.classList.toggle('aug-maj7-acc',rootAlter!==0&&selectedMode==='augmented'&&seventh==='maj7'); // # or b, + and maj7 all active
+  box.classList.toggle('sharp-aug-maj7',rootAlter>0&&selectedMode==='augmented'&&seventh==='maj7'); // # + and maj7 all active
+  const plainSfx=chordSuffix(),loneAcc=!plainSfx&&rootAlter!==0; // major + sharp/flat: just the accidental, no M
+  const sfx=plainSfx||(loneAcc?'':'M'); // plain major has no suffix on the chord names, so the box shows M
+  if(rootAlter){ // active sharp / flat comes first, like the accidental after a root: ♯m, ♭°, ♯sus4 ...
+    const acc=document.createElement('span');acc.className='label-acc';fillAccidental(acc,accidentalText(rootAlter));if(loneAcc){acc.classList.add('lone');if(rootAlter>0)acc.classList.add('sharp')}txt.append(acc);
+  }
+  const sm=/^(m?)sus([24])$/.exec(sfx);
+  if(sm){
+    if(sm[1])txt.append(sm[1]);
+    const sw=document.createElement('span');sw.className='sus-word';sw.textContent='sus';
+    const sn=document.createElement('span');sn.className='sus-num';sn.textContent=sm[2];
+    if(sm[2]==='4')txt.append(sw);else txt.append(sw,sn); // sus4 shows only "sus"
+  }else if(/sus/.test(sfx)){const sc=document.createElement('span');sc.className='sus-combo';sc.textContent=sfx.replace('sus4','sus');txt.append(sc)} // sus + an added note: as small as the plain sus word
+  else txt.append(sfx.replace('sus4','sus')); // the box uses the same + and \u00B0 symbols as the pad and the chord labels // the quality box spells out aug / dim instead of + and ° (only here)
+  // Degree labels of the current chord (R 3 5 b7 9 13 ...), one per note column.
+  const dg=document.getElementById('qualityDegrees');
+  if(dg){const degs=chordDegreeLabels();dg.style.gridTemplateColumns='repeat('+degs.length+',minmax(0,1fr))';dg.textContent='';degs.forEach(d=>{const c=document.createElement('span');c.className='qd';fillDegree(c,d);dg.appendChild(c)})}
+  fillQualityArrows();
+  // Match a chord-name box of the note bar: full bar width, height from the top line to the line above the notes.
+  const chords=bar.querySelectorAll('.note-chord'),c=chords[1]||chords[0],list=c&&c.querySelector('.note-list');
+  if(list&&bar.offsetWidth){
+    const line=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--line'))||1;
+    const h=list.getBoundingClientRect().top-c.getBoundingClientRect().top+(chords[1]?0:1)+3*line;
+    box.style.width=bar.offsetWidth+'px';{const ar=document.getElementById('qualityArrows');box.style.height=(h+(dg?dg.offsetHeight:0)+(ar?ar.offsetHeight:0))+'px'}
+  }
+  fitQualityText(box,txt);
+  if(!box.dataset.moved){const f=document.querySelector('.key-wheel-wrap');if(f&&box.style.position!=='absolute'){const fr=f.getBoundingClientRect();if(fr.width)box.style.left=Math.max(EDGE,Math.min(innerWidth-EDGE-box.offsetWidth,fr.right-box.offsetWidth))+'px'}} // an unmoved box stays right-aligned under the wheel as columns are added
+  {const r=box.getBoundingClientRect(); if(box.style.position==='fixed'||getComputedStyle(box).position==='fixed'){if(r.right>innerWidth-EDGE)box.style.left=Math.max(EDGE,innerWidth-EDGE-r.width)+'px'}} // adding a column widens the box: keep it on screen
+}
+// When the angled chord labels (#/b + s2/s4 + maj7, and # + aug + maj7 + 11/13) poke out above the top of the screen, bump the top bar down by exactly the amount
+// that was cut off. Only the bar moves; every other item on the canvas stays where it is.
+// When the labels go back to normal, the bar returns. Positions saved by saveLayout() leave this temporary shift out.
+const lblShifted=new Map();let lblApplied=0; // lblShifted: how far each item was actually moved (the screen edge can stop an item short)
+function keepLabelsOnScreen(){
+  const bar=document.getElementById('bottomWrap'),lab=document.getElementById('bottomLabels');if(!bar||!lab)return;
+  const top=e=>parseFloat(e.style.top);
+  if(bar.classList.contains('bar-off')||!(lab.classList.contains('sus-maj7-alt')||lab.classList.contains('sharp-aug-ext-alt'))){ // top bar hidden (note-bar-only view): nothing is on screen to protect, so nothing is bumped and any earlier shift is undone
+    if(!lblShifted.size)return;
+    lblShifted.forEach((amt,e)=>{e.style.top=(top(e)-amt)+'px'}); // labels are normal again: everything goes back where it was
+    lblShifted.clear();lblApplied=0;return;
+  }
+  const tops=[...lab.querySelectorAll('.label-suffix')].map(e=>e.getBoundingClientRect().top);
+  if(!tops.length)return;
+  const need=Math.ceil(6-Math.min(...tops));if(need<=0)return; // already fully on screen
+  const move=[bar],before=move.map(e=>e===bar?(parseFloat(getComputedStyle(bar).top)||0):top(e));
+  move.forEach((e,i)=>{e.style.top=(before[i]+need)+'px'});
+  try{clampLayout()}catch(_){}
+  move.forEach((e,i)=>{const d=(e===bar?(parseFloat(getComputedStyle(bar).top)||0):top(e))-before[i];if(d)lblShifted.set(e,(lblShifted.get(e)||0)+d)});
+  lblApplied=lblShifted.get(bar)||0;
+}
+// Face of the 4 / 5 button: a mini circle of fifths with the same outline + arrow the big wheel shows for the current set
+// (4 = G C F ... outline on the left and top, ending at G; 5 = F C G ... outline from the top round the right side, starting at F).
+function updateSetIcon(){
+  const g=document.getElementById('btnSetIcon');if(!g)return;
+  const cw=showAltTriads,col=cw?'#6fa3c0':'#bf9a58',step=Math.PI/6; // softer than the big wheel's outline colours
+  const start=cw?11:7,a1=start*step-step/2+.06,a2=(start+6)*step+step/2-.06;
+  const P=(r,a)=>[12+r*Math.sin(a),12-r*Math.cos(a)],rI=6.9,rO=10.6;
+  const o1=P(rO,a1),o2=P(rO,a2),i2=P(rI,a2),i1=P(rI,a1);
+  const d=`M ${o1} A ${rO} ${rO} 0 1 1 ${o2} L ${i2} A ${rI} ${rI} 0 1 0 ${i1} Z`;
+  const ea=cw?a1:a2,dir=cw?1:-1,tx=dir*Math.cos(ea),ty=dir*Math.sin(ea),nx=Math.sin(ea),ny=-Math.cos(ea);
+  const m=P((rI+rO)/2,ea),h=2.7,len=2.6;
+  const pts=[[m[0]+nx*h,m[1]+ny*h],[m[0]+tx*len,m[1]+ty*len],[m[0]-nx*h,m[1]-ny*h]].map(q=>q.join(',')).join(' ');
+  g.innerHTML=`<path d="${d}" fill="${col}" fill-opacity=".22" stroke="${col}" stroke-width="1.2" stroke-linejoin="round"/><polygon points="${pts}" fill="${col}" stroke="none"/>`;
+}
+function render(){
+  // Button highlights first, so a later drawing step can never leave a selected button unlit.
+  // M and m are mutually exclusive: never both outlined.
+  {const isMajorTriad=!isMinor&&(selectedMode==='major'||selectedMode==='augmented'||selectedMode==='diminished');document.getElementById('btnUp').classList.toggle('active',isMajorTriad&&(selectedMode!=='major'||rootAlter!==0||!!seventh||extOn())); // plain major with nothing else on is the default state: M shows as a normal, un-outlined button
+  document.getElementById('btnUp').setAttribute('aria-pressed',isMajorTriad?'true':'false')}
+  document.getElementById('btnDown').classList.toggle('active',isMinor);
+  document.getElementById('btnRight').classList.toggle('active',rootAlter===1);
+  document.getElementById('btnLeft').classList.toggle('active',rootAlter===-1);
+  document.getElementById('btnPractical').classList.toggle('active',practicalSpelling);
+  document.getElementById('btnSus2').classList.toggle('active',selectedMode==='sus2');
+  document.getElementById('btnSus4').classList.toggle('active',selectedMode==='sus4');
+  document.getElementById('btnAug').classList.toggle('active',selectedMode==='augmented');
+  document.getElementById('btnDim').classList.toggle('active',selectedMode==='diminished');
+  document.getElementById('btn7').classList.toggle('active',seventh==='b7');
+  document.getElementById('btnMaj7').classList.toggle('active',seventh==='maj7');
+  document.getElementById('btn6').classList.toggle('active',seventh==='6');
+  [['btn9',9],['btn11',11],['btn13',13]].forEach(([id,v])=>document.getElementById(id).classList.toggle('active',extOn()&&ext===v));
+  document.documentElement.classList.toggle('has7',!!seventh);
+  {const n=chordIntervals().length;document.documentElement.dataset.n=n;document.documentElement.style.setProperty('--rows',n)}
+  document.querySelectorAll('.swipe-pad .plate').forEach(pl=>pl.classList.toggle('on',pl.__btn.classList.contains('active')));
+  indicator.textContent=`${selectedKey} ${selectedMode}`;
+  drawWheel();
+  // One triad bar. Tap it to flip between the two chord sets (groupsBottom <-> groupsTop).
+  const barGroups=showAltTriads?groupsTop:groupsBottom;
+  // groupsBottom = G C F B E A D (roots a fourth apart) -> 4 ; groupsTop = F C G D A E B (roots a fifth apart) -> 5
+  updateSetIcon();
+  {const fb=document.getElementById('btnFull'),applies=extOn()&&(ext===11||ext===13);
+   {// Mini chord box: 7 cells, root at the bottom then 3 5 7 9 11 13. 7 = every cell lit; 5 = the two notes the 5-note voicing leaves out are dimmed.
+    const g=document.getElementById('btnFullIcon');
+    // Face: a guitar for the 5-note guitar voicing, piano keys (7 white keys) for the full 7-note chord.
+    const S='fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"';
+    if(!fullNotes){
+      g.innerHTML=`<g transform="rotate(40 12 12) scale(.96) translate(.5 .5)"><path ${S} d="M12 10.6c-2 0-3.4 1.2-3.4 2.8 0 1 .6 1.7 1.2 2.2-1 .7-2.2 1.8-2.2 3.4 0 2 1.8 3.4 4.4 3.4s4.4-1.4 4.4-3.4c0-1.6-1.2-2.7-2.2-3.4.6-.5 1.2-1.2 1.2-2.2 0-1.6-1.4-2.8-3.4-2.8z"/><path ${S} d="M11.2 10.7V3.8M12.8 10.7V3.8"/><rect ${S} x="10.3" y="1" width="3.4" height="2.8" rx=".6"/><circle ${S} cx="12" cy="16.9" r="1.3"/></g>`;
+    }else{
+      const kw=18/7,x=k=>(3+kw*k).toFixed(2);
+      g.innerHTML=`<rect ${S} x="3" y="5.5" width="18" height="13" rx="1.6"/><path ${S} stroke-width="1" d="M${x(3)} 5.5V18.5M${x(1)} 13V18.5M${x(2)} 13V18.5M${x(4)} 13V18.5M${x(5)} 13V18.5M${x(6)} 13V18.5"/>`+[1,2,4,5,6].map(k=>`<rect x="${(3+kw*k-1.05).toFixed(2)}" y="5.5" width="2.1" height="7.5" rx=".5" fill="#fff"/>`).join('');
+    }}
+   fb.classList.toggle('on',fullNotes&&applies);fb.classList.toggle('na',!applies);
+   fb.setAttribute('aria-label',fullNotes?'Showing the full 7-note chord; tap for the 5-note voicing':'Showing the 5-note voicing; tap for the full 7-note chord')}
+  document.getElementById('btnSet').setAttribute('aria-label',showAltTriads?'Triad set: circle of fifths':'Triad set: circle of fourths');
+  applyChordAccidentals(document.getElementById('bottomBar'),barGroups);
+  renderChordLabels(document.getElementById('bottomLabels'),barGroups);
+  alignLabels();
+  try{keepLabelsOnScreen()}catch(_){} // layout items are not defined yet on the very first render
+  renderNoteBar(barGroups);
+  // Directional selection: top=major (default), bottom=minor,
+  // right=sharp, left=flat. M and m are mutually exclusive: never both outlined.
+  updateQualityBox();
+}
+// One invisible shadow plate behind each pad key (same grid cell and size); render() switches it on while its key is active.
+document.querySelectorAll('.swipe-pad .swipe-btn').forEach(b=>{const pl=document.createElement('span');pl.className=b.className+' plate';pl.setAttribute('aria-hidden','true');pl.__btn=b;b.before(pl)});
+makeBar(document.getElementById('bottomBar'),groupsBottom);render();showMotionFromTriadChange();
+// Lock the note bar at its widest (and tallest) state so it never changes size: try every chord set,
+// quality, sharp/flat and practical-spelling combination the buttons can reach, keep the largest, then restore.
+function lockNoteBarSize(){
+  const el=document.getElementById('noteBar');if(!el)return;
+  const saved={selectedMode,isMinor,rootAlter,practicalSpelling,seventh,ext,fullNotes};
+  el.style.minWidth='0px';el.style.minHeight='0px';el.style.setProperty('--root-h','auto');
+  let w=0,h=0,rh=0;
+  [['major',false],['major',true],['augmented',false],['augmented',true],['diminished',true],['diminished',false],['sus2',false],['sus4',false]].flatMap(m=>[[null,null],['b7',null],['maj7',null],['6',null],['b7',9],['b7',11],['b7',13],['maj7',13],['b7',11,true],['b7',13,true],['maj7',13,true]].map(sv=>[...m,...sv])).forEach(([mode,minor,sv,ex,fl])=>{
+    selectedMode=mode;isMinor=minor;seventh=sv;ext=ex;fullNotes=!!fl;
+    [-1,0,1].forEach(alter=>{rootAlter=alter;
+      [false,true].forEach(practical=>{practicalSpelling=practical;
+        [groupsBottom,groupsTop].forEach(g=>{
+          renderNoteBar(g,true);
+          const r=el.getBoundingClientRect();w=Math.max(w,r.width);h=Math.max(h,r.height);
+          el.querySelectorAll('.note-root').forEach(n=>{rh=Math.max(rh,n.getBoundingClientRect().height)});
+        });
+      });
+    });
+  });
+  ({selectedMode,isMinor,rootAlter,practicalSpelling,seventh,ext,fullNotes}=saved);
+  el.style.setProperty('--root-h',Math.ceil(rh)+'px');
+  el.style.minWidth='0px';el.style.minHeight='0px'; // boxes keep one size: the bar is as wide as its columns, and a 4th column simply adds to it
+  renderNoteBar(showAltTriads?groupsTop:groupsBottom);
+  updateQualityBox();
+}
+function fit(){const w=window.innerWidth;const cell=Math.min(44,(w-18)/14);/* capped so the bar stays short on wide screens and never reaches the wheel */document.documentElement.style.setProperty('--cell',`${cell}px`);document.documentElement.style.setProperty('--cw',`${(w-34)/16}px`);document.documentElement.style.setProperty('--font',`${Math.max(12,Math.min(28,cell*.68))}px`)}fit();lockNoteBarSize();try{alignLabels()}catch(_){} /* the labels were first aligned before fit() set the real font size, so they sat too far right until load: align again now */ if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{try{alignLabels()}catch(_){}});window.addEventListener('resize',()=>{fit();lockNoteBarSize();alignLabels();try{keepLabelsOnScreen()}catch(_){}});
+function showMotionFromTriadChange(){
+  // One arrow per triad tone that the chord quality moves (vs the major triad on the same root).
+  const quality=[
+    0,
+    selectedMode==='sus2'?-2:selectedMode==='sus4'?1:(isMinor?-1:0), // semitones vs a major 3rd: sus2 drops two, sus4 rises one
+    selectedMode==='diminished'?-1:selectedMode==='augmented'?1:0
+  ];
+  // Each tone's arrow = whole-triad sharp/flat transposition + chord-quality movement.
+  // Blue = the tone has moved 2 or more semitones in total from its major-triad position
+  // (e.g. b + m, b + dim, # + aug, # + sus4, or sus2 on its own, whose 2nd sits 2 semitones below the major 3rd).
+  // White square = the moves cancel exactly. A single 1-semitone move (m, dim, aug, sus4, #, b alone) stays white.
+  const selectedFormula=quality.map(q=>q+rootAlter);
+  const cancelled=quality.map(q=>q!==0&&rootAlter!==0&&q+rootAlter===0);
+  const doubled=selectedFormula.map(m=>Math.abs(m)>=2);
+  const ids=['motionRoot','motionThird','motionFifth'];
+  const labelIds=['motionRootLabel','motionThirdLabel','motionFifthLabel'];
+
+  // Sharp/flat transposes all three tones equally; chord quality changes only its defining tones.
+  const degreeLabels=chordDegreeLabels();
+
+  ids.forEach((id,index)=>{
+    const cell=document.getElementById(id);
+    const label=document.getElementById(labelIds[index]);
+    if(!cell)return;
+    if(label)label.textContent=degreeLabels[index];
+    const movement=selectedFormula[index];
+    // Render one full-size arrow for every moving triad tone.
+    const count=Math.min(1,Math.abs(movement));
+    const glyph=movement>0?'▲':'▼';
+    cell.replaceChildren();
+    const isDoubleMovement=doubled[index];
+    cell.classList.toggle('double-motion',isDoubleMovement);
+    if(label)label.classList.toggle('double-motion',isDoubleMovement);
+    if(cancelled[index]){const sq=document.createElement('span');sq.className='motion-square';cell.appendChild(sq);return}
+    if(count===0)return;
+    const pair=document.createElement('span');
+    pair.className='motion-triangle-pair';
+    for(let n=0;n<count;n++){
+      const triangle=document.createElement('span');
+      triangle.className='motion-triangle';
+      triangle.textContent=glyph;
+      pair.appendChild(triangle);
+    }
+    cell.appendChild(pair);
+  });
+  [['motionSeventhLabel','motionSeventh'],['motionNinthLabel','motionNinth'],['motionEleventhLabel','motionEleventh'],['motionThirteenthLabel','motionThirteenth']].forEach(([l,a],i)=>{
+    const sl=document.getElementById(l),sa=document.getElementById(a);
+    if(sl)sl.textContent=degreeLabels[3+i]||'';if(sa){sa.replaceChildren();if(degreeLabels[3+i]){const p=document.createElement('span');p.className='motion-plus';p.textContent='+';sa.appendChild(p)}} // added notes (7, 6, 9, 11, 13) get a plain + in their arrow cell
+  });
+  syncNoteMotion();
+}
+function applyMajorButtonClick(){
+  // A direct tap on M is the full default reset: natural-root major.
+  // This is intentionally different from swiping up, which only changes
+  // chord quality and preserves an active flat or sharp.
+  // M only switches the minor modifier off; aug/dim/sus and sharp/flat are left untouched.
+  isMinor=false;
+  if(selectedMode!=='augmented'&&selectedMode!=='diminished')selectedMode='major'; // M gives a major 3rd and combines with + and \u00B0 (C+, C(\u266D5)); it drops sus2 / sus4
+  showMotionFromTriadChange();
+  render();
+}
+function applyDirection(dir){
+  if(dir==='up'){
+    // M: major 3rd. Keeps + / \u00B0 on (C+, C(\u266D5)); drops sus2 / sus4.
+    isMinor=false;
+    if(selectedMode!=='augmented'&&selectedMode!=='diminished')selectedMode='major';
+  }else if(dir==='down'){
+    // m: minor 3rd. Keeps + / \u00B0 on (Cm(#5), C\u00B0); drops sus2 / sus4.
+    isMinor=!isMinor;
+    if(selectedMode!=='augmented'&&selectedMode!=='diminished')selectedMode='major';
+  }else if(dir==='right'){
+    // #: transpose root, third AND fifth up one semitone.
+    rootAlter = rootAlter === 1 ? 0 : 1;
+  }else if(dir==='left'){
+    // b: transpose root, third AND fifth down one semitone.
+    rootAlter = rootAlter === -1 ? 0 : -1;
+  }
+  showMotionFromTriadChange();
+  render();
+}
+
+// Drop every inline position/size written by enableDrag so the CSS defaults apply again.
+let wheelScale=1.3; // pinch scale of the circle of fifths (1 = default size)
+function resetLayout(){
+  wheelScale=1.3;
+  [document.getElementById('bottomWrap'),document.getElementById('noteBar'),document.getElementById('circleStack'),document.querySelector('.swipe-pad'),document.getElementById('motionIndicator'),document.getElementById('qualityBox'),document.querySelector('.key-wheel-wrap')].forEach(el=>{
+    if(!el)return;
+    ['position','left','top','right','bottom','width','height','zIndex','transform'].forEach(prop=>{el.style[prop]=''});
+    el.classList.remove('dragging','horiz');delete el.dataset.moved;
+  });
+  window.__triadDragging=false;
+  {const p=document.querySelector('.swipe-pad'),b=document.getElementById('btnStack');if(p)p.classList.remove('stacked');if(b){b.classList.remove('on');b.setAttribute('aria-pressed','false')}try{localStorage.removeItem('chordBoardStacked')}catch(_){}}
+  try{localStorage.removeItem(LAYOUT_KEY)}catch(_){}
+  applyDefaultLayout();
+}
+function resetControls(){
+  // Reset chord/triad settings only; preserve the user's current UI placements.
+  selectedKey='C';
+  selectedMode='major';isMinor=false;
+  rootAlter=0;
+  practicalSpelling=false;
+  seventh=null;ext=null;fullNotes=false;
+  showMotionFromTriadChange();
+  render();
+}
+// Screen-wide swipes step one position at a time, in the same order as the pad around M:
+//  vertical   (finger down = next):  sus4 > aug > M > m > dim > sus2   (a swipe up goes back the other way)
+//  horizontal (finger right = toward #): b > natural > #   (b is on the left of M, # on the right; so b <-> # always passes through natural)
+// Sharp/flat and chord quality are independent, so swiping one never resets the other.
+const QUALITY_LADDER=[['sus4',false],['augmented',false],['major',false],['major',true],['diminished',true],['sus2',false]];
+function ladderIndex(){
+  if(selectedMode==='major')return isMinor?3:2;
+  return QUALITY_LADDER.findIndex(q=>q[0]===selectedMode);
+}
+function applySwipe(dir){
+  if(dir==='up'||dir==='down'){
+    const next=Math.max(0,Math.min(QUALITY_LADDER.length-1,ladderIndex()+(dir==='down'?1:-1)));
+    [selectedMode,isMinor]=QUALITY_LADDER[next];
+  }else{
+    rootAlter=Math.max(-1,Math.min(1,rootAlter+(dir==='right'?1:-1)));
+  }
+  showMotionFromTriadChange();
+  render();
+}
+let swipe=null,swallowClickUntil=0;
+// Once every finger is up, drop any pending hold timer or half-finished drag (runs after each object's own pointerup).
+function settleDrags(){setTimeout(()=>{if(!activePointers.size){(window.__dragCancels||[]).forEach(f=>f());window.__triadDragging=false}},0)}
+const activePointers=new Set();window.__activePointers=activePointers;
+// Swipes work from anywhere on the page, including from buttons, the pad, the bar and the wheel.
+// A tap stays a tap (under 45px); a swipe is never also counted as a tap on whatever it started or ended on.
+document.addEventListener('pointerdown',e=>{
+  if(activePointers.size===0){
+    // Nothing is touching the screen, so no drag or pinch can be in progress: clear any flag a lost
+    // pointerup/pointercancel left behind. A stuck flag is what made swipes stop responding.
+    window.__triadDragging=false;window.__wheelPinch=false;
+    if(window.__clearWheelPointers)window.__clearWheelPointers();
+    document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
+  }
+  activePointers.add(e.pointerId);
+  // A second finger means pinch / multi-touch, never a swipe.
+  swipe=activePointers.size>1?null:{x:e.clientX,y:e.clientY,t:Date.now(),id:e.pointerId};
+},{passive:true,capture:true});
+document.addEventListener('pointerup',e=>{
+  activePointers.delete(e.pointerId);
+  settleDrags();
+  const s=swipe&&swipe.id===e.pointerId?swipe:null;
+  if(s)swipe=null;
+  if(!s||window.__triadDragging)return;
+  const dx=e.clientX-s.x,dy=e.clientY-s.y;
+  if(Date.now()-s.t>1500||Math.max(Math.abs(dx),Math.abs(dy))<45)return;
+  swallowClickUntil=Date.now()+80; // the click that follows a swipe must not press a button or flip the bar
+  applySwipe(Math.abs(dy)>=Math.abs(dx)?(dy<0?'up':'down'):(dx<0?'left':'right'));
+},{passive:true,capture:true});
+['pointercancel','lostpointercapture'].forEach(t=>document.addEventListener(t,e=>{
+  if(t==='pointercancel'){activePointers.delete(e.pointerId);if(swipe&&swipe.id===e.pointerId)swipe=null;settleDrags()}
+},{passive:true,capture:true}));
+window.addEventListener('blur',()=>{activePointers.clear();swipe=null;window.__triadDragging=false;window.__wheelPinch=false});
+document.addEventListener('click',e=>{
+  if(Date.now()<swallowClickUntil){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation()}
+},true);
+document.getElementById('btnReset').addEventListener('click',e=>{e.preventDefault();e.stopPropagation();resetControls()});
+const qualityButtons={btnSus2:'sus2',btnSus4:'sus4',btnAug:'augmented',btnDim:'diminished'};
+Object.entries(qualityButtons).forEach(([id,mode])=>{
+  const btn=document.getElementById(id);
+  btn.addEventListener('click',e=>{
+    e.preventDefault();e.stopPropagation();
+    const prev=selectedMode;
+    if(prev===mode)selectedMode='major'; // switching + or \u00B0 off removes only that modifier; the 3rd (M / m) stays as it was
+    else{
+      selectedMode=mode;
+      if(mode==='diminished')isMinor=true; // \u00B0 starts as the standard diminished chord (minor 3rd); tap M for C(\u266D5)
+      else if(mode==='augmented'){if(prev!=='major')isMinor=false} // + keeps an m that is already on (Cm(#5)); coming from \u00B0 / sus it starts as C+
+      else isMinor=false; // sus2 / sus4 have no 3rd
+    }
+    showMotionFromTriadChange();
+    render();
+  });
+  btn.addEventListener('pointerdown',e=>e.stopPropagation());
+  btn.addEventListener('pointerup',e=>e.stopPropagation());
+});
+// 7 / maj7: toggle a seventh on top of whatever triad quality is set (M + 7 = C7, M + maj7 = Cmaj7, m + 7 = Cm7, dim + 7 = Cm7b5 ...). The two are mutually exclusive.
+[['btn7','b7'],['btnMaj7','maj7'],['btn6','6']].forEach(([id,kind])=>{
+  const btn=document.getElementById(id);
+  btn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();seventh=seventh===kind?null:kind;if(!seventh||seventh==='6')ext=null;showMotionFromTriadChange();render()});
+  btn.addEventListener('pointerdown',e=>e.stopPropagation());
+  btn.addEventListener('pointerup',e=>e.stopPropagation());
+});
+// 9 / 11 / 13: extensions on top of the seventh, as 5-note guitar voicings. Pressing one with no 7 set uses the dominant 7; pressing the lit one turns the extension off and keeps the 7.
+[['btn9',9],['btn11',11],['btn13',13]].forEach(([id,v])=>{
+  const btn=document.getElementById(id);
+  btn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();if(extOn()&&ext===v)ext=null;else{ext=v;if(!seventh||seventh==='6')seventh='b7'}showMotionFromTriadChange();render()});
+  btn.addEventListener('pointerdown',e=>e.stopPropagation());
+  btn.addEventListener('pointerup',e=>e.stopPropagation());
+});
+const practicalButton=document.getElementById('btnPractical');
+function activatePractical(e){e.preventDefault();e.stopPropagation();practicalSpelling=!practicalSpelling;showMotionFromTriadChange();render()}
+practicalButton.addEventListener('click',activatePractical);
+['Up','Right','Down','Left'].forEach(name=>{
+  const btn=document.getElementById('btn'+name);
+  btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    if(name==='Up')applyMajorButtonClick();
+    else applyDirection(name.toLowerCase());
+  });
+  btn.addEventListener('pointerdown',e=>e.stopPropagation());
+  btn.addEventListener('pointerup',e=>e.stopPropagation());
+});
+// Press-and-hold any draggable object for 0.3 seconds to move it independently.
+// Whatever is picked up goes above everything else and stays above it when put down (the most recently moved item is always on top).
+// The top bar lives inside #barsArea, a full-screen layer of its own, so that layer is raised along with it.
+let topZ=40;
+function raiseToTop(el){
+  topZ++;el.style.zIndex=String(topZ);
+  const area=el.closest&&el.closest('.bars-area');if(area)area.style.zIndex=String(topZ);
+}
+// The chord-button pad's box is wider than its buttons (232px box, buttons end 19px short of the right edge, and the 13 / 11 / 9 column sits above the top edge).
+// How far everything the pad draws (buttons AND their blue outline frames, which stick out 3px past the box) reaches inside / outside the box on each side, so the drawn pad (not the empty box) stops at the screen edge like every other item.
+function visibleInsets(el){
+  const z={left:0,right:0,top:0,bottom:0};
+  if(!el||!el.classList||!el.classList.contains('swipe-pad'))return z;
+  const r=el.getBoundingClientRect();let l=Infinity,rt=-Infinity,t=Infinity,b=-Infinity;
+  [...el.children].forEach(x=>{const q=x.getBoundingClientRect();if(!q.width)return;l=Math.min(l,q.left);rt=Math.max(rt,q.right);t=Math.min(t,q.top);b=Math.max(b,q.bottom)});
+  if(!isFinite(l))return z;
+  return {left:l-r.left,right:r.right-rt,top:t-r.top,bottom:r.bottom-b};
+}
+function enableDrag(wrap,delay,options={}){
+  let timer=null,drag=false,pid=null,sx=0,sy=0,ox=0,oy=0,suppressClick=false;
+  const centerX=!!options.centerX;
+  const capture=!!options.capture;
+  function centeredLeft(el){return Math.max(EDGE,(innerWidth-el.offsetWidth)/2)}
+  wrap.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    if(options.blocked&&options.blocked())return;
+    clearTimeout(timer); // a second finger must not leave the first finger's hold timer running
+    if(drag){wrap.classList.remove('dragging');window.__triadDragging=false;drag=false} // ...nor a half-finished drag flag
+    pid=e.pointerId;sx=e.clientX;sy=e.clientY;
+    const r=wrap.getBoundingClientRect();ox=r.left;oy=r.top;drag=false;
+    timer=setTimeout(()=>{
+      if(options.blocked&&options.blocked())return;
+      if(window.__activePointers&&!window.__activePointers.has(pid))return; // already released: not a hold
+      drag=true;window.__triadDragging=true;wrap.dataset.moved='1';
+      wrap.classList.add('dragging');
+      if(options.preventClickAfterDrag)suppressClick=true;
+      wrap.style.position='fixed';
+      wrap.style.left=(centerX?centeredLeft(wrap):ox)+'px';
+      wrap.style.top=oy+'px';wrap.style.right='auto';wrap.style.bottom='auto';
+      wrap.style.width=`${r.width}px`;wrap.style.height=`${r.height}px`;
+      raiseToTop(wrap);wrap.style.transform='none';
+      try{wrap.setPointerCapture(pid)}catch(_){}
+    },delay);
+  },capture);
+  wrap.addEventListener('pointermove',e=>{
+    if(e.pointerId!==pid)return;
+    if(!drag){
+      if(Math.abs(e.clientX-sx)>8||Math.abs(e.clientY-sy)>8){clearTimeout(timer);timer=null}
+      return;
+    }
+    e.preventDefault();
+    const vi=visibleInsets(wrap);
+    const x=centerX?centeredLeft(wrap):Math.max(EDGE-vi.left,Math.min(innerWidth-EDGE-wrap.offsetWidth+vi.right,ox+e.clientX-sx));
+    const y=Math.max(EDGE-vi.top,Math.min(innerHeight-EDGE-wrap.offsetHeight+vi.bottom,oy+e.clientY-sy));
+    wrap.style.left=x+'px';wrap.style.top=y+'px';
+  },capture);
+  function end(e){
+    if(e.pointerId!==pid)return;
+    clearTimeout(timer);timer=null;
+    if(drag&&centerX)wrap.style.left=centeredLeft(wrap)+'px';
+    if(drag)window.__triadDragging=false;
+    if(drag)wrap.classList.remove('dragging');
+    drag=false;pid=null;
+  }
+  wrap.addEventListener('pointerup',end,capture);
+  wrap.addEventListener('pointercancel',end,capture);
+  if(options.preventClickAfterDrag){
+    wrap.addEventListener('click',e=>{
+      if(!suppressClick)return;
+      e.preventDefault();e.stopPropagation();suppressClick=false;
+    },true);
+  }
+  if(centerX){
+    const recenter=()=>{
+      if(wrap.style.position==='fixed'||wrap.id==='bottomWrap'){
+        wrap.style.left=centeredLeft(wrap)+'px';
+      }
+    };
+    window.addEventListener('resize',recenter);setTimeout(recenter,0);
+  }
+  // Abort a pending or active hold-drag (used when a second finger turns the touch into a pinch).
+  function cancel(){
+    clearTimeout(timer);timer=null;
+    if(drag){wrap.classList.remove('dragging');window.__triadDragging=false}
+    drag=false;pid=null;
+  }
+  (window.__dragCancels=window.__dragCancels||[]).push(cancel);
+  return {cancel};
+}
+enableDrag(document.getElementById('bottomWrap'),300,{centerX:true,preventClickAfterDrag:true});
+// The vertical note bar moves independently: press and hold 0.3 seconds, then drag.
+enableDrag(document.getElementById('noteBar'),300,{preventClickAfterDrag:true});
+// A tap on the triad bar flips it to the other chord set; tapping again flips it back (a hold-drag never counts as a tap).
+function toggleTriadSet(){showAltTriads=!showAltTriads;render()}
+document.getElementById('bottomWrap').addEventListener('click',toggleTriadSet);
+// Circle button under the pad: shows 4 (circle of fourths set) or 5 (circle of fifths set); tapping it flips the bar too.
+const setButton=document.getElementById('btnSet');
+setButton.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();toggleTriadSet()});
+setButton.addEventListener('pointerdown',e=>e.stopPropagation());
+setButton.addEventListener('pointerup',e=>e.stopPropagation());
+// Circle button: 5 = 5-note voicings for 11 / 13, 7 = the full stacked chord (R 3 5 7 9 11 13). Only changes anything while 11 or 13 is on.
+const fullButton=document.getElementById('btnFull');
+fullButton.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();fullNotes=!fullNotes;showMotionFromTriadChange();render()});
+fullButton.addEventListener('pointerdown',e=>e.stopPropagation());
+fullButton.addEventListener('pointerup',e=>e.stopPropagation());
+// Move the complete arrow/reset/practical control cluster after a stationary 0.2-second hold.
+const swipePad=document.querySelector('.swipe-pad');
+enableDrag(swipePad,200,{capture:true,preventClickAfterDrag:true});
+// The three circle buttons move on their own, apart from the triad buttons, after the same 0.2-second hold.
+enableDrag(document.getElementById('circleStack'),200,{capture:true,preventClickAfterDrag:true});
+// Slide the circle buttons down to the bottom of the screen and they lay out horizontally; slide away and they go back to vertical.
+const CIRCLE_BTN=39,CIRCLE_GAP=14;
+function setCircleOrientation(stack,horiz){
+  const n=stack.children.length,len=n*CIRCLE_BTN+(n-1)*CIRCLE_GAP;
+  stack.classList.toggle('horiz',horiz);
+  stack.style.width=(horiz?len:CIRCLE_BTN)+'px';
+  stack.style.height=(horiz?CIRCLE_BTN:len)+'px';
+}
+(function(){
+  const stack=document.getElementById('circleStack');
+  const ENTER=50,LEAVE=90; // px between the bottom of the (vertical) stack and the bottom of the screen (hysteresis stops flicker at the boundary)
+  let gb=null; // distance from the finger down to the bottom of the vertical stack, kept for the whole drag
+  let gx=0,gy=0; // where the finger holds the horizontal row (from its left / top edge): the row follows the finger by this offset instead of re-centring under it
+  stack.addEventListener('pointerdown',()=>{gb=null},true);
+  stack.addEventListener('pointermove',e=>{
+    if(!stack.classList.contains('dragging'))return;
+    const horiz=stack.classList.contains('horiz');
+    if(gb===null){const n=stack.children.length,len=n*CIRCLE_BTN+(n-1)*CIRCLE_GAP,sr=stack.getBoundingClientRect();gb=horiz?len/2:sr.bottom-e.clientY;gx=e.clientX-sr.left;gy=e.clientY-sr.top}
+    // Where the vertical stack would be if it were still upright: its bottom and top edges follow the finger.
+    const vLen=stack.children.length*CIRCLE_BTN+(stack.children.length-1)*CIRCLE_GAP,vB=e.clientY+gb,vT=vB-vLen;
+    const lim=horiz?LEAVE:ENTER,nearB=innerHeight-vB<lim,nearT=vT<lim;
+    const want=nearB||nearT; // within the zone at the top or bottom of the screen -> horizontal; out of it -> vertical
+    if(want!==horiz){
+      setCircleOrientation(stack,want);
+      if(want){gx=stack.offsetWidth/2;gy=stack.offsetHeight/2} // turning horizontal: held in the middle, as before
+      if(!want){
+        stack.style.left=Math.max(EDGE,Math.min(innerWidth-EDGE-stack.offsetWidth,e.clientX-stack.offsetWidth/2))+'px';
+        stack.style.top=Math.max(EDGE,Math.min(innerHeight-EDGE-stack.offsetHeight,vB-stack.offsetHeight))+'px';
+      }
+    }
+    if(want){ // horizontal: moves freely, but only inside the zone along the top or bottom edge
+      const h=stack.offsetHeight,band=ENTER-EDGE;
+      const lo=nearB?innerHeight-EDGE-h-band:EDGE,hi=nearB?innerHeight-EDGE-h:EDGE+band;
+      stack.style.top=Math.max(lo,Math.min(hi,e.clientY-gy))+'px';
+      stack.style.left=Math.max(EDGE,Math.min(innerWidth-EDGE-stack.offsetWidth,e.clientX-gx))+'px';
+    }
+  },true);
+})();
+enableDrag(document.getElementById('qualityBox'),200,{capture:true,preventClickAfterDrag:true});
+// The formula box is attached to the top triad bar and moves with it.
+// Circle hold-drag after a stationary 0.2-second hold.
+const wheelWrap=document.querySelector('.key-wheel-wrap');window.__wheelPinch=false;
+const wheelDrag=enableDrag(wheelWrap,200,{preventClickAfterDrag:true,blocked:()=>window.__wheelPinch});
+// Chord-bar view button: both bars -> top bar only -> note bar only -> both. The hidden bar keeps its place (and any position you dragged it to).
+(function(){
+  const btn=document.getElementById('btnBars'),top=document.getElementById('bottomWrap'),note=document.getElementById('noteBar');if(!btn)return;
+  const modes=['top','note'],text={top:'Showing only the top chord bar; tap to show only the note bar',note:'Showing only the note bar; tap to show only the top bar'};
+  function setBars(m,save){
+    top.classList.toggle('bar-off',m==='note');note.classList.toggle('bar-off',m==='top');
+    btn.classList.remove('m-both','m-top','m-note');btn.classList.add('m-'+m);btn.dataset.mode=m;btn.setAttribute('aria-label',text[m]);
+    if(save){try{localStorage.setItem('chordBoardBars',m)}catch(_){}}
+    try{render()}catch(_){} // re-fit the bar that just came back
+  }
+  btn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();setBars(btn.dataset.mode==='top'?'note':'top',true)});
+  let saved=null;try{saved=localStorage.getItem('chordBoardBars')}catch(_){}
+  setBars(modes.includes(saved)?saved:'top',false); // a previously saved "both" falls back to the top bar
+})();
+// Stack button: puts maj7 / 7 / 6 and 13 / 11 / 9 on top of the triad buttons (and back beside them). The pad grows upwards, so the triad buttons stay exactly where they are.
+(function(){
+  const btn=document.getElementById('btnStack'),pad=document.querySelector('.swipe-pad');if(!btn||!pad)return;
+  const GROW=183,W_SIDE=232,W_STACK=114,H_SIDE=160,H_STACK=343;
+  function setStacked(on,save){
+    if(pad.classList.contains('stacked')===on)return;
+    const positioned=pad.style.position==='fixed',top=pad.getBoundingClientRect().top;
+    pad.classList.toggle('stacked',on);btn.classList.toggle('on',on);
+    btn.setAttribute('aria-pressed',on?'true':'false');
+    btn.setAttribute('aria-label',on?'Extra chord buttons stacked on top of the triad buttons; tap to put them beside':'Extra chord buttons beside the triad buttons; tap to stack them on top');
+    // a dragged pad carries inline sizes, which would hide the class's size
+    if(pad.style.width)pad.style.width=(on?W_STACK:W_SIDE)+'px';
+    if(pad.style.height)pad.style.height=(on?H_STACK:H_SIDE)+'px';
+    if(positioned){
+      const vi=visibleInsets(pad),y=Math.max(EDGE-vi.top,Math.min(innerHeight-EDGE-pad.offsetHeight+vi.bottom,top+(on?-GROW:GROW)));
+      pad.style.top=y+'px';
+      if(pad.dataset.moved){try{saveLayout()}catch(_){}}
+    }
+    if(save){try{localStorage.setItem('chordBoardStacked',on?'1':'0')}catch(_){}}
+  }
+  btn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();setStacked(!pad.classList.contains('stacked'),true)});
+  btn.addEventListener('pointerdown',e=>e.stopPropagation());
+  btn.addEventListener('pointerup',e=>e.stopPropagation());
+  let saved=null;try{saved=localStorage.getItem('chordBoardStacked')}catch(_){}
+  if(saved==='1')setStacked(true,false);
+})();
+// Circle-of-fifths show/hide button: removes the wheel from the canvas and brings it back (position and size are kept; the choice is remembered).
+(function(){
+  const btn=document.getElementById('btnWheel');if(!btn)return;
+  function setWheelVisible(v,save){
+    wheelWrap.classList.toggle('wheel-hidden',!v);btn.classList.toggle('off',!v);
+    btn.setAttribute('aria-pressed',v?'true':'false');btn.setAttribute('aria-label',v?'Hide circle of fifths':'Show circle of fifths');
+    if(save){try{localStorage.setItem('chordBoardWheelVisible',v?'1':'0')}catch(_){}}
+  }
+  btn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();setWheelVisible(wheelWrap.classList.contains('wheel-hidden'),true)});
+  let saved=null;try{saved=localStorage.getItem('chordBoardWheelVisible')}catch(_){}
+  setWheelVisible(saved!=='0',false);
+})();
+// Pinch or spread two fingers on the circle of fifths to resize it: never smaller than its
+// default size, never more than 30% larger. It scales around its own centre.
+(function(){
+  const BASE=172.5,MIN_SCALE=1,MAX_SCALE=1.3;
+  const pts=new Map();
+  window.__clearWheelPointers=()=>pts.clear();
+  let startDist=1,startScale=1,suppressClickUntil=0;
+  const spread=()=>{const [a,b]=[...pts.values()];return Math.hypot(a.x-b.x,a.y-b.y)};
+  function setWheelSize(next){
+    next=Math.max(MIN_SCALE,Math.min(MAX_SCALE,next));
+    if(next===wheelScale)return;
+    const r=wheelWrap.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,size=BASE*next;
+    const left=Math.max(EDGE,Math.min(innerWidth-EDGE-size,cx-size/2)),top=Math.max(EDGE,Math.min(innerHeight-EDGE-size,cy-size/2));
+    wheelWrap.dataset.moved='1';
+    Object.assign(wheelWrap.style,{position:'fixed',left:left+'px',top:top+'px',right:'auto',bottom:'auto',transform:'none',width:size+'px',height:size+'px'});
+    wheelScale=next;
+  }
+  // Registered after enableDrag, so a second finger cancels the hold-drag that the first finger started.
+  wheelWrap.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse')return;
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size===2){
+      wheelDrag.cancel();
+      window.__wheelPinch=true;window.__triadDragging=true; // also keeps the screen-wide swipe handler quiet
+      startDist=Math.max(1,spread());startScale=wheelScale;
+      pts.forEach((_,id)=>{try{wheelWrap.setPointerCapture(id)}catch(_){}});
+    }
+  });
+  wheelWrap.addEventListener('pointermove',e=>{
+    const p=pts.get(e.pointerId);if(!p)return;
+    p.x=e.clientX;p.y=e.clientY;
+    if(window.__wheelPinch&&pts.size>=2){e.preventDefault();setWheelSize(startScale*spread()/startDist)}
+  });
+  function release(e){
+    if(!pts.delete(e.pointerId))return;
+    if(pts.size===0&&window.__wheelPinch){
+      window.__wheelPinch=false;window.__triadDragging=false;
+      suppressClickUntil=Date.now()+350; // a pinch must never count as a tap on a key
+    }
+  }
+  wheelWrap.addEventListener('pointerup',release);
+  wheelWrap.addEventListener('pointercancel',release);
+  wheelWrap.addEventListener('click',e=>{
+    if(Date.now()<suppressClickUntil){e.preventDefault();e.stopPropagation()}
+  },true);
+  // Trackpad pinch on desktop (ctrl+wheel) and Safari's own gesture events.
+  wheelWrap.addEventListener('wheel',e=>{
+    if(!e.ctrlKey)return;
+    e.preventDefault();setWheelSize(wheelScale*Math.exp(-e.deltaY*0.01));
+  },{passive:false});
+  ['gesturestart','gesturechange','gestureend'].forEach(t=>wheelWrap.addEventListener(t,e=>e.preventDefault()));
+})();
+// Never allow text selection (which is what triggers iOS cursors, handles and the magnifier).
+['selectstart','contextmenu','dragstart'].forEach(t=>document.addEventListener(t,e=>e.preventDefault(),{capture:true,passive:false}));
+document.addEventListener('selectionchange',()=>{const sel=window.getSelection&&window.getSelection();if(sel&&sel.rangeCount)sel.removeAllRanges()});
+// ---- Default layout: no item may sit on top of another, at load, on refresh and on resize. ----
+// Each item has an ideal spot (the arrangement from the screenshot: wheel under the bar, formula beside it, note bar
+// under the wheel, buttons bottom right). If the ideal spot is free it is used; otherwise the nearest free spot is.
+function packDefaultLayout(W,H,bar,items,fixed){
+  const M=8,top=bar.y+bar.h+M,placed=[bar,...Object.values(fixed)],out={};
+  const hit=(a,b,g)=>a.x<b.x+b.w+g&&b.x<a.x+a.w+g&&a.y<b.y+b.h+g&&b.y<a.y+a.h+g;
+  const overlap=(a,b)=>Math.max(0,Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x))*Math.max(0,Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y));
+  const ref=id=>out[id]||fixed[id];
+  items.forEach(it=>{
+    const ideal=it.ideal(ref,{W,H,M,top});
+    const xs=[ideal.x,M,W-M-it.w],ys=[ideal.y,top,H-M-it.h];
+    placed.forEach(r=>{xs.push(r.x,r.x+r.w+M,r.x+r.w-it.w,r.x-M-it.w);ys.push(r.y,r.y+r.h+M,r.y+r.h-it.h,r.y-M-it.h)});
+    let best=null;
+    for(const gap of [M,2,0]){
+      xs.forEach(x=>ys.forEach(y=>{
+        if(x<M-.01||y<top-.01||x+it.w>W-M+.01||y+it.h>H-M+.01)return;
+        const c={x,y,w:it.w,h:it.h};
+        if(placed.some(r=>hit(c,r,gap)))return;
+        const d=Math.hypot(x-ideal.x,y-ideal.y);
+        if(!best||d<best.d)best={x,y,d};
+      }));
+      if(best)break;
+    }
+    if(!best){ // the screen is too small for everything: least overlap, kept on screen
+      let least=Infinity;
+      xs.forEach(x=>ys.forEach(y=>{
+        const cx=Math.max(M,Math.min(W-M-it.w,x)),cy=Math.max(top,Math.min(H-M-it.h,y)),c={x:cx,y:cy,w:it.w,h:it.h};
+        const score=placed.reduce((t,r)=>t+overlap(c,r),0)*1000+Math.hypot(cx-ideal.x,cy-ideal.y);
+        if(score<least){least=score;best={x:cx,y:cy}}
+      }));
+    }
+    out[it.id]={x:best.x,y:best.y,w:it.w,h:it.h};placed.push(out[it.id]);
+  });
+  return out;
+}
+// ---- Layout persistence: positions and wheel size are saved, so nothing is ever reset behind the user's back. ----
+const LAYOUT_KEY='chordBoardLayout.v2';
+const layoutEls=()=>({wheel:document.querySelector('.key-wheel-wrap'),note:document.getElementById('noteBar'),pad:document.querySelector('.swipe-pad'),stack:document.getElementById('circleStack'),quality:document.getElementById('qualityBox')});
+function saveLayout(){
+  try{
+    const out={wheelScale},els=layoutEls();
+    out.stackHoriz=!!(els.stack&&els.stack.classList.contains('horiz'));
+    Object.entries(els).forEach(([id,el])=>{if(el&&el.dataset.moved){const r=el.getBoundingClientRect();out[id]={x:r.left,y:r.top-(lblShifted.get(el)||0),w:r.width,h:r.height}}});
+    const bar=document.getElementById('bottomWrap');
+    if(bar&&bar.dataset.moved)out.bar={y:bar.getBoundingClientRect().top-(lblShifted.get(bar)||0)};
+    localStorage.setItem(LAYOUT_KEY,JSON.stringify(out));
+  }catch(_){}
+}
+function restoreLayout(){
+  let saved=null;
+  try{saved=JSON.parse(localStorage.getItem(LAYOUT_KEY))}catch(_){}
+  if(!saved)return;
+  const els=layoutEls(),bar=document.getElementById('bottomWrap');
+  if(saved.bar&&bar&&isFinite(saved.bar.y)){bar.dataset.moved='1';bar.style.top=Math.max(EDGE,saved.bar.y)+'px'}
+  if(isFinite(saved.wheelScale))wheelScale=Math.max(1,Math.min(1.3,saved.wheelScale));
+  Object.entries(els).forEach(([id,el])=>{
+    const p=saved[id];if(!el||!p||!isFinite(p.x)||!isFinite(p.y))return;
+    el.dataset.moved='1';
+    const st={position:'fixed',left:p.x+'px',top:p.y+'px',right:'auto',bottom:'auto',transform:'none'};
+    if(id==='wheel'){const size=172.5*wheelScale;st.width=size+'px';st.height=size+'px'}
+    Object.assign(el.style,st);
+    if(id==='stack'&&saved.stackHoriz&&typeof setCircleOrientation==='function')setCircleOrientation(el,true);
+  });
+}
+// Keep every item on screen when the window changes size (no re-packing, nothing is moved otherwise).
+function clampLayout(){
+  Object.values(layoutEls()).forEach(el=>{
+    if(!el||el.style.position!=='fixed')return;
+    const r=el.getBoundingClientRect();
+    const vi=visibleInsets(el);
+    const x=Math.max(EDGE-vi.left,Math.min(innerWidth-EDGE-r.width+vi.right,r.left)),y=Math.max(EDGE-vi.top,Math.min(innerHeight-EDGE-r.height+vi.bottom,r.top));
+    if(Math.abs(x-r.left)>.5)el.style.left=x+'px';
+    if(Math.abs(y-r.top)>.5)el.style.top=y+'px';
+  });
+}
+// ---- Default layout (the arrangement from the reference screenshot): note bar left, wheel centre, formula box right
+// of the wheel, triad pad below, circle buttons bottom right. Used only for items the user has never moved. ----
+function referenceLayout(W,H,bar,sz){
+  const bb=bar.y+bar.h,M=8,P={};
+  P.wheel={x:W-M-sz.wheel.w,y:bb+20.5};
+  P.note={x:M,y:bb+22};
+  P.stack={x:W-M-sz.stack.w-9,y:bb+537.5};
+  P.pad={x:P.stack.x-sz.stack.w-sz.pad.w-2.5,y:bb+446};
+  Object.keys(P).forEach(id=>{
+    P[id].x=Math.max(M,Math.min(W-M-sz[id].w,P[id].x));
+    P[id].y=Math.max(M,Math.min(H-M-sz[id].h,P[id].y));
+    P[id].w=sz[id].w;P[id].h=sz[id].h;
+  });
+  return P;
+}
+function applyDefaultLayout(){
+  const G=14,q=id=>document.getElementById(id);
+  const els=layoutEls();
+  if(Object.values(els).some(e=>!e))return;
+  const rect=el=>{const r=el.getBoundingClientRect();return{x:r.left,y:r.top,w:r.width,h:r.height}};
+  const size=el=>({w:el.offsetWidth,h:el.offsetHeight});
+  const bar=rect(q('bottomWrap'));
+  bar.h+=(7-(parseInt(document.documentElement.dataset.n)||3))*(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell'))||0); // keep room for the tallest bar (5 rows) so nothing below ever sits under it
+  const free=[],fixed={};
+  ['wheel','note','pad','stack'].forEach(id=>{els[id].dataset.moved?fixed[id]=rect(els[id]):free.push(id)});
+  if(!free.length)return;
+  // 1) The reference arrangement, when it fits without any item touching another.
+  const sz={};free.forEach(id=>sz[id]=size(els[id]));
+  ['wheel','note','pad','stack'].forEach(id=>{if(!sz[id])sz[id]={w:fixed[id].w,h:fixed[id].h}});
+  const ref=referenceLayout(innerWidth,innerHeight,bar,sz);
+  const placed=[bar,...Object.values(fixed)],out={};
+  const hit=(a,b)=>a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h;
+  let ok=true;
+  free.forEach(id=>{if(placed.some(r=>hit(ref[id],r)))ok=false;placed.push(ref[id]);out[id]=ref[id]});
+  // 2) Otherwise (very small screens) fall back to the nearest-free-spot packer.
+  if(!ok){
+    const ideals={
+      wheel:(r,c)=>({x:c.M,y:c.top}),
+      note:(r,c)=>{const w=r('wheel');return{x:c.M,y:w.y+w.h+c.M}},
+      pad:(r,c)=>({x:c.W-c.M-els.stack.offsetWidth-G-els.pad.offsetWidth,y:c.H-c.M-els.pad.offsetHeight}),
+      stack:(r,c)=>{const p=r('pad');return{x:p.x+p.w+G,y:p.y+3}}
+    };
+    const items=free.map(id=>({id,...size(els[id]),ideal:ideals[id]}));
+    const packed=packDefaultLayout(innerWidth,innerHeight,bar,items,fixed);
+    Object.keys(out).forEach(k=>delete out[k]);Object.assign(out,packed);
+  }
+  // The pad is wider now (5 columns): put the note bar one gap to its right and push the circle buttons out to the right edge, when the screen is wide enough for all three side by side.
+  if(out.note&&out.pad){
+    const pr=out.pad,nr=out.note,sr=out.stack||fixed.stack,W=innerWidth,M=8;
+    const nx=pr.x+pr.w+G,sx=W-M-(sr?sr.w:0);
+    if(nr.y<pr.y+pr.h&&pr.y<nr.y+nr.h&&nx+nr.w+G<=sx){nr.x=nx;if(out.stack)out.stack.x=sx}
+  }
+  Object.entries(out).forEach(([id,r])=>{
+    Object.assign(els[id].style,{position:'fixed',left:r.x+'px',top:r.y+'px',right:'auto',bottom:'auto',transform:'none'});
+  });
+}
+try{restoreLayout()}catch(_){}
+if(wheelScale!==1.3){const w=document.querySelector('.key-wheel-wrap');if(w&&!w.dataset.moved){const size=172.5*wheelScale;w.style.width=size+'px';w.style.height=size+'px'}}
+function placeQualityBox(){
+  const box=document.getElementById('qualityBox'),f=document.querySelector('.key-wheel-wrap');
+  if(!box||!f||box.dataset.moved)return;
+  updateQualityBox();
+  const r=f.getBoundingClientRect();
+  box.style.left=Math.max(EDGE,Math.min(innerWidth-EDGE-box.offsetWidth,r.right-box.offsetWidth))+'px';
+  box.style.top=Math.min(innerHeight-EDGE-box.offsetHeight,r.bottom+10)+'px';
+}
+try{applyDefaultLayout()}catch(_){}
+try{placeQualityBox()}catch(_){}
+// Default placement runs at load only. A resize or rotation never re-arranges anything: it just keeps items on screen.
+window.addEventListener('load',()=>{try{lockNoteBarSize();alignLabels();applyDefaultLayout();placeQualityBox();updateQualityBox();clampLayout();keepLabelsOnScreen()}catch(_){}});
+window.addEventListener('resize',()=>requestAnimationFrame(clampLayout));
+window.addEventListener('orientationchange',()=>setTimeout(clampLayout,250));
+// Save after every move or pinch (capture phase, so it runs even when the control stops propagation).
+['pointerup','pointercancel'].forEach(t=>window.addEventListener(t,()=>setTimeout(saveLayout,60),true));
+</script></body></html>
